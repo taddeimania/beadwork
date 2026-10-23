@@ -132,7 +132,7 @@ public:
 
 private:
     juce::Point<float> centre() const { return getLocalBounds().toFloat().getCentre(); }
-    float ringRadius() const { return juce::jmin (getWidth(), getHeight()) * 0.5f - 38.0f; }
+    float ringRadius() const { return (float) juce::jmin (getWidth(), getHeight()) * 0.5f - 38.0f; }
     float beadRadius (int steps) const;
     juce::Point<float> beadCentre (int step, int steps) const;
     int  stepAt (juce::Point<float>) const;

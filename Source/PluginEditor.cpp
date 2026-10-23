@@ -844,7 +844,10 @@ void BeadworkPanel::sceneMenu (int scene)
     juce::PopupMenu m;
     m.addSectionHeader ("Scene " + String (scene + 1));
     m.addItem (1, "Recall", used);
-    m.addItem (2, used ? "Overwrite with the current lanes" : "Store the current lanes");
+    m.addSeparator();
+    m.addItem (2, "Save all lanes to scene");
+    m.addItem (6, "Update current lane (" + laneNameOf (focusedTrack()) + ") in scene", used);
+    m.addSeparator();
     m.addItem (3, "Rename...", used);
     m.addItem (4, "Clear", used);
     m.addSeparator();
@@ -859,7 +862,17 @@ void BeadworkPanel::sceneMenu (int scene)
                          switch (r)
                          {
                              case 1: safe->proc.recallScene (scene); break;
-                             case 2: safe->proc.storeScene (scene); break;
+                             case 2:
+                                 safe->proc.storeScene (scene);
+                                 safe->statusText  = "Saved all lanes to scene " + String (scene + 1);
+                                 safe->statusTicks = 45;
+                                 break;
+                             case 6:
+                                 safe->proc.storeSceneLane (scene, safe->focus);
+                                 safe->statusText  = "Updated " + laneNameOf (safe->focusedTrack()).toUpperCase()
+                                                   + " in scene " + String (scene + 1);
+                                 safe->statusTicks = 45;
+                                 break;
                              case 3:
                              {
                                  auto* w = new juce::AlertWindow ("Rename scene", {}, juce::MessageBoxIconType::NoIcon, safe.getComponent());
@@ -1108,30 +1121,30 @@ void BeadworkPanel::paint (juce::Graphics& g)
     g.drawRect (kLcd, 1.0f);
 
     const bool running = proc.isRunning();
-    String big, small;
+    String headline, subline;
     if (statusText.isNotEmpty())
     {
-        big = statusText;
-        small = proc.presets.currentName();
+        headline = statusText;
+        subline = proc.presets.currentName();
     }
     else if (! running)
     {
-        big = "--";
-        small = "STOPPED";
+        headline = "--";
+        subline = "STOPPED";
     }
     else
     {
         const int step = proc.playingStep (focus);
-        big = laneNameOf (tr).toUpperCase() + "  P" + String (proc.playingPattern (focus) + 1) + "  "
+        headline = laneNameOf (tr).toUpperCase() + "  P" + String (proc.playingPattern (focus) + 1) + "  "
             + String (step + 1).paddedLeft ('0', 2);
-        small = proc.sceneChainRunning() ? "SCENE " + String (proc.scene() + 1) + "   SLOT " + String (proc.sceneSlot() + 1)
+        subline = proc.sceneChainRunning() ? "SCENE " + String (proc.scene() + 1) + "   SLOT " + String (proc.sceneSlot() + 1)
                                          : String ("PLAYING");
     }
     if (proc.getParam (ids::scatter) > 0.5f && statusText.isEmpty())
-        small = "SCATTER  " + ids::scatterTypeNames()[juce::roundToInt (proc.getParam (ids::scatterType))]
+        subline = "SCATTER  " + ids::scatterTypeNames()[juce::roundToInt (proc.getParam (ids::scatterType))]
               + "  " + String::fromUTF8 ("\xc2\xb7") + "  " + String (juce::roundToInt (proc.getParam (ids::scatterDepth)));
-    drawText (g, big, kLcd.withHeight (40.0f).translated (0.0f, 4.0f), 24.0f, colours::lcd, true);
-    drawText (g, small, kLcd.withTrimmedTop (40.0f), 12.0f, colours::lcd.withAlpha (0.8f), true);
+    drawText (g, headline, kLcd.withHeight (40.0f).translated (0.0f, 4.0f), 24.0f, colours::lcd, true);
+    drawText (g, subline, kLcd.withTrimmedTop (40.0f), 12.0f, colours::lcd.withAlpha (0.8f), true);
 
     // Run and mute LEDs.
     drawLed (g, { 1206.0f, 790.0f }, 9.0f, colours::ledGreen, running, running ? flashes[(size_t) focus] : 0.0f);

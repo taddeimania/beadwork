@@ -1,67 +1,60 @@
-# Builds the Beadwork VST3 on demand.
+# Builds and tests Beadwork on macOS, Windows and Linux. Runs only when you
+# start it: Actions tab -> "Build" -> "Run workflow", then pick what to build
+# in "Use workflow from".
 #
-# Run it from GitHub: Actions tab -> "Build plugin" -> "Run workflow",
-# tick the platforms you want, and press the green button. When it finishes,
-# the plugins are listed as downloads at the bottom of the run's summary page.
+# - A branch (e.g. main): build, test, and keep the packaged plugins as run
+#   artifacts for 30 days.
+# - A version tag (v1.2.3): the same builds, then a *draft* GitHub release is
+#   created with the three archives attached and the text from
+#   .github/release-notes.md. Review it on the Releases page and publish.
+#   The tag must match project(Beadwork VERSION ...) in CMakeLists.txt.
 
-name: Build plugin
+name: Build
 
 on:
   workflow_dispatch:
-    inputs:
-      windows:
-        description: "Windows (x64)"
-        type: boolean
-        default: true
-      macos:
-        description: "macOS (universal: Apple silicon + Intel)"
-        type: boolean
-        default: false
-      linux:
-        description: "Linux (x64)"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   JUCE_VERSION: "8.0.9"
 
 jobs:
-  # Turn the ticked boxes into a build matrix.
-  plan:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
-    steps:
-      - id: plan
-        shell: bash
-        run: |
-          entries=()
-          if [ "${{ inputs.windows }}" = "true" ]; then entries+=('{"platform":"Windows","os":"windows-latest"}'); fi
-          if [ "${{ inputs.macos }}" = "true" ];   then entries+=('{"platform":"macOS","os":"macos-latest"}'); fi
-          if [ "${{ inputs.linux }}" = "true" ];   then entries+=('{"platform":"Linux","os":"ubuntu-latest"}'); fi
-          if [ ${#entries[@]} -eq 0 ]; then
-            echo "::error::Tick at least one platform."
-            exit 1
-          fi
-          joined=$(IFS=,; echo "${entries[*]}")
-          echo "matrix={\"include\":[${joined}]}" >> "$GITHUB_OUTPUT"
-
   build:
-    needs: plan
     name: ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+          - platform: Windows
+            os: windows-latest
+          - platform: Linux
+            os: ubuntu-latest
     defaults:
       run:
         shell: bash
 
     steps:
       - uses: actions/checkout@v7
+
+      # A release tag must match the version the plugin reports, or the
+      # downloads would be labelled with the wrong version.
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(sed -n 's/^project(Beadwork VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match CMakeLists.txt (VERSION $version). Update project(Beadwork VERSION ...), commit, and move the tag."
+            exit 1
+          fi
 
       # JUCE is about 100 MB; keep a copy between runs instead of downloading it every time.
       - name: Restore JUCE
@@ -103,26 +96,77 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
 
-      # Package the .vst3 ourselves so file permissions and the macOS code
-      # signature survive the download.
+      # Package the plugin ourselves so file permissions and the macOS code
+      # signature survive the download. Beadwork is a MIDI generator, so it's a
+      # VST3 only (no AU or standalone). Each archive also carries the two PDF
+      # guides and the licence. Release builds are named by version only;
+      # other builds also carry the commit.
       - name: Package
         run: |
           version=$(sed -n 's/^project(Beadwork VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
-          name="Beadwork-${version}-${{ matrix.platform }}-${GITHUB_SHA::7}"
-          cd build/Beadwork_artefacts/Release/VST3
+          name="Beadwork-${version}-${{ matrix.platform }}"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then name="${name}-${GITHUB_SHA::7}"; fi
+          art=build/Beadwork_artefacts/Release
+          stage="$RUNNER_TEMP/$name"
+          mkdir -p "$stage"
+          cp -R "$art/VST3/Beadwork.vst3" "$stage/"
+          cp docs/Beadwork-Getting-Started.pdf docs/Beadwork-Patterns-and-Scenes.pdf LICENSE "$stage/"
           case "$RUNNER_OS" in
-            Windows) 7z a -tzip "$GITHUB_WORKSPACE/$name.zip" Beadwork.vst3 > /dev/null
-                     echo "ARCHIVE=$name.zip" >> "$GITHUB_ENV" ;;
-            macOS)   ditto -c -k --sequesterRsrc --keepParent Beadwork.vst3 "$GITHUB_WORKSPACE/$name.zip"
-                     echo "ARCHIVE=$name.zip" >> "$GITHUB_ENV" ;;
-            Linux)   tar -czf "$GITHUB_WORKSPACE/$name.tar.gz" Beadwork.vst3
-                     echo "ARCHIVE=$name.tar.gz" >> "$GITHUB_ENV" ;;
+            macOS)
+              ditto -c -k --sequesterRsrc --keepParent "$stage" "$GITHUB_WORKSPACE/$name.zip"
+              echo "ARCHIVE=$name.zip" >> "$GITHUB_ENV" ;;
+            Windows)
+              (cd "$RUNNER_TEMP" && 7z a -tzip "$GITHUB_WORKSPACE/$name.zip" "$name" > /dev/null)
+              echo "ARCHIVE=$name.zip" >> "$GITHUB_ENV" ;;
+            Linux)
+              tar -czf "$GITHUB_WORKSPACE/$name.tar.gz" -C "$RUNNER_TEMP" "$name"
+              echo "ARCHIVE=$name.tar.gz" >> "$GITHUB_ENV" ;;
           esac
 
       - name: Upload
         uses: actions/upload-artifact@v7
         with:
+          name: ${{ env.ARCHIVE }}
           path: ${{ env.ARCHIVE }}
           archive: false
           if-no-files-found: error
           retention-days: 30
+
+  # Version tags only: gather the three archives into a draft release.
+  release:
+    name: Draft release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Collect the builds
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+          # Keep the .zip archives as they are; by default they'd be unpacked.
+          skip-decompress: true
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dist
+          if find dist -mindepth 1 -maxdepth 1 -type d | grep -q .; then
+            echo "::error::Expected only archives in dist/, found folders."
+            exit 1
+          fi
+          # Re-running after a failure: add the files to the existing draft.
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --draft \
+              --verify-tag \
+              --title "Beadwork ${GITHUB_REF_NAME#v}" \
+              --notes-file .github/release-notes.md
+          fi

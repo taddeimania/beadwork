@@ -111,7 +111,7 @@ void drawLayerOverlay (Graphics& g, Point<float> c, float r, const Pattern& p, i
             // n small beads in an arc above the main one.
             for (int i = 0; i < n; ++i)
             {
-                const float a = MathConstants<float>::pi * (-0.85f + 0.7f * (n == 1 ? 0.5f : (float) i / (n - 1)));
+                const float a = MathConstants<float>::pi * (-0.85f + 0.7f * (n == 1 ? 0.5f : (float) i / (float) (n - 1)));
                 const auto  q = c.getPointOnCircumference (r * 1.9f, a + MathConstants<float>::halfPi);
                 g.setColour (ink);
                 g.fillEllipse (Rectangle<float> (r * 0.42f, r * 0.42f).withCentre (q));
@@ -124,12 +124,12 @@ void drawLayerOverlay (Graphics& g, Point<float> c, float r, const Pattern& p, i
             if (ch >= 100) return;
             Path arc;
             arc.addCentredArc (c.x, c.y, r * 1.6f, r * 1.6f, 0.0f, 0.0f,
-                               MathConstants<float>::twoPi * ch / 100.0f, true);
+                               MathConstants<float>::twoPi * (float) ch / 100.0f, true);
             g.setColour (ink);
             g.strokePath (arc, PathStrokeType (jmax (1.5f, r * 0.28f), PathStrokeType::curved, PathStrokeType::rounded));
             g.setColour (colours::socket);
             Path rest;
-            rest.addCentredArc (c.x, c.y, r * 1.6f, r * 1.6f, 0.0f, MathConstants<float>::twoPi * ch / 100.0f,
+            rest.addCentredArc (c.x, c.y, r * 1.6f, r * 1.6f, 0.0f, MathConstants<float>::twoPi * (float) ch / 100.0f,
                                 MathConstants<float>::twoPi, true);
             g.strokePath (rest, PathStrokeType (jmax (1.0f, r * 0.14f)));
             break;
@@ -138,7 +138,7 @@ void drawLayerOverlay (Graphics& g, Point<float> c, float r, const Pattern& p, i
         {
             const int n = layerValue (p, s, l);
             if (n == 0) return;
-            const float dx = r * 1.7f * n / 50.0f;
+            const float dx = r * 1.7f * (float) n / 50.0f;
             g.setColour (ink);
             g.drawLine (c.x, c.y + r * 1.6f, c.x + dx, c.y + r * 1.6f, jmax (1.5f, r * 0.25f));
             g.fillEllipse (Rectangle<float> (r * 0.4f, r * 0.4f).withCentre ({ c.x + dx, c.y + r * 1.6f }));
@@ -147,7 +147,7 @@ void drawLayerOverlay (Graphics& g, Point<float> c, float r, const Pattern& p, i
         case Layer::velocity:
         {
             const int v = layerValue (p, s, l);
-            const float h = r * 2.6f * v / 127.0f;
+            const float h = r * 2.6f * (float) v / 127.0f;
             const auto bar = Rectangle<float> (c.x + r * 1.35f, c.y + r * 1.3f - h, jmax (2.0f, r * 0.32f), h);
             g.setColour (p.stepVel[(size_t) jlimit (0, kMaxSteps - 1, s)] == 0 ? colour.withAlpha (0.6f) : ink);
             g.fillRect (bar);
@@ -540,7 +540,7 @@ void Necklace::mouseDrag (const MouseEvent& e)
         while (d >  MathConstants<float>::pi) d -= MathConstants<float>::twoPi;
         while (d < -MathConstants<float>::pi) d += MathConstants<float>::twoPi;
         // One step of rotation per bead's worth of angle; wrap into the length.
-        int r = twistStartRotate + roundToInt (d / MathConstants<float>::twoPi * n);
+        int r = twistStartRotate + roundToInt (d / MathConstants<float>::twoPi * (float) n);
         r = ((r % n) + n) % n;
         if (r != p.rotate)
         {

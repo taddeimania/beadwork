@@ -47,7 +47,8 @@ public:
     void requestRestart() { restartRequested.store (true); }
     void reroll();                         // new dice for chance, humanise, random direction
     void recallScene (int scene);          // writes the lane pattern / mute parameters
-    void storeScene (int scene);           // snapshots them into the scene
+    void storeScene (int scene);           // snapshots every lane into the scene
+    void storeSceneLane (int scene, int lane); // updates just one lane in a stored scene
 
     // The scene last recalled or stored (-1: none). Lit amber on the panel, the
     // way a picked pattern is. Kept here so it survives closing the editor.

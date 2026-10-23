@@ -24,46 +24,154 @@ fit together and builds a song with them.
 
 ---
 
-## Building
+## Download
 
-Needs CMake 3.22+ and a C++20 compiler. JUCE 8.0.9 is fetched on first
-configure.
+You don't need to build Beadwork yourself. Ready-made plugins for macOS,
+Windows and Linux are on the [Releases page](../../releases/latest).
+Download the archive for your system from the latest release:
+
+| Archive | Contains |
+|---|---|
+| macOS `.zip` | `Beadwork.vst3`, universal for Apple silicon and Intel |
+| Windows `.zip` | `Beadwork.vst3` |
+| Linux `.tar.gz` | `Beadwork.vst3` |
+
+Every archive also has the two PDF guides. Beadwork is a MIDI generator, so it
+comes as a VST3 only: there's no Audio Unit or standalone version.
+
+Then install the plugin:
+
+- **macOS**: move `Beadwork.vst3` into `~/Library/Audio/Plug-Ins/VST3`, then
+  run:
+
+  ```sh
+  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Beadwork.vst3
+  ```
+
+  The builds aren't signed with an Apple developer certificate, so macOS
+  quarantines them when downloaded, and the DAW refuses to load them until
+  you clear that flag.
+- **Windows**: copy the whole `Beadwork.vst3` folder into
+  `C:\Program Files\Common Files\VST3`.
+- **Linux**: copy `Beadwork.vst3` into `~/.vst3`.
+
+Then rescan plug-ins in your DAW, and see [Using it in Live](#using-it-in-live)
+for the routing.
+
+## Building from source
+
+Every platform needs:
+
+- CMake 3.22 or newer
+- Git
+- A C++20 compiler (see each platform below)
+- An internet connection for the first configure
+
+Every build is the same three steps: configure, build, test. The first
+configure downloads JUCE 8.0.9, which includes the VST3 SDK, so it takes a few
+minutes; later builds are incremental.
+
+### macOS
+
+Install the Xcode command line tools and CMake:
 
 ```sh
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+xcode-select --install
+brew install cmake          # or the installer from cmake.org
 ```
 
-The VST3 is copied into `~/Library/Audio/Plug-Ins/VST3` after each build. Pass
-`-DBEADWORK_COPY_PLUGIN=OFF` to skip that.
+Then build:
+
+```sh
+cd path/to/beadwork
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j
+ctest --test-dir build -C Release --output-on-failure
+```
+
+The build installs `Beadwork.vst3` into `~/Library/Audio/Plug-Ins/VST3`.
+
+- It builds for your Mac's own processor. For a universal binary, add
+  `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"` to the configure step.
+- Near the end of the build you'll see lines like *"Replacing invalid
+  signature with ad-hoc signature"*. They're normal: JUCE re-signs the plugin
+  after adding its metadata, and an ad-hoc signature is all you need on your
+  own machine.
+
+### Windows
+
+You need **Visual Studio 2022** (Community is fine) with the **Desktop
+development with C++** workload, which includes CMake, and **Git for
+Windows**.
+
+Open **Developer PowerShell for VS 2022**, then:
+
+```powershell
+cd path\to\beadwork
+cmake -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
+The plugin is built to `build\Beadwork_artefacts\Release\VST3\Beadwork.vst3`.
+That's a folder: copy the whole folder into
+`C:\Program Files\Common Files\VST3`.
+
+To have the build copy it there for you, run the terminal as Administrator
+and add `-DBEADWORK_COPY_PLUGIN=ON` to the configure step. Writing to that
+folder needs administrator rights, which is why the copy is off by default on
+Windows.
+
+### Linux
+
+Ableton Live doesn't run on Linux, but Beadwork works in any VST3 host there
+that can route a plugin's MIDI output to an instrument, such as Bitwig Studio
+or REAPER.
+
+You need GCC 11+ or Clang 14+. On Debian or Ubuntu, install the toolchain and
+JUCE's dependencies:
+
+```sh
+sudo apt install build-essential cmake git pkg-config \
+    libasound2-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev \
+    libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+    libxinerama-dev libxrandr-dev libxrender-dev
+```
+
+On other distributions, install the equivalent `-devel` packages. Then build:
+
+```sh
+cd path/to/beadwork
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+ctest --test-dir build -C Release --output-on-failure
+```
+
+The build installs the plugin to `~/.vst3/Beadwork.vst3`.
+
+### Build options
 
 | Option | Default | What it does |
-| --- | --- | --- |
-| `BEADWORK_JUCE_DIR` | *(empty)* | Use a local JUCE checkout instead of downloading one |
-| `BEADWORK_COPY_PLUGIN` | `ON` (not Windows) | Install into the system VST3 folder after building |
-| `BEADWORK_BUILD_TOOLS` | `OFF` | Also build the headless snapshot tool |
+|---|---|---|
+| `BEADWORK_COPY_PLUGIN` | `ON` (`OFF` on Windows) | Copy the plugin into the system VST3 folder after each build |
+| `BEADWORK_JUCE_DIR` | *(empty)* | Use a local JUCE 8.0.9 checkout instead of downloading one; useful offline |
+| `BEADWORK_BUILD_TOOLS` | `OFF` | Also build `BeadworkSnapshot`, a headless dev tool (see below) |
+| `CMAKE_OSX_ARCHITECTURES` | your Mac's processor | `"arm64;x86_64"` builds a universal binary |
 
-For a universal macOS binary:
-
-```sh
-cmake -B build -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Release
-```
+Pass any of these at configure time, for example
+`cmake -B build -DBEADWORK_JUCE_DIR=/path/to/JUCE`.
 
 ### Tests
 
-```sh
-cmake --build build --target BeadworkEngineTests && ./build/BeadworkEngineTests
-```
-
-The engine has no JUCE dependency, so the tests build and run anywhere. They
-cover the Euclidean figures against Toussaint's published rhythms (tresillo,
-cinquillo, bossa nova clave ...), the per-step layers, sample-accurate timing
-at any block size, polymeter and polyrhythm, accents, ratchets, chance, nudge,
-swing, mute and solo, pattern chains, quantised pattern changes, scene chains,
-transport start / stop / jumps, a worst-case stress run, and Scatter: exact
-results for its types, quantised engage, a clean return to the pattern on
-release, and identical output at any buffer size for all 100 type / depth
-combinations.
+`ctest` runs `BeadworkEngineTests`. The engine has no JUCE dependency, so the
+tests build and run anywhere. They cover the Euclidean figures against
+Toussaint's published rhythms (tresillo, cinquillo, bossa nova clave ...), the
+per-step layers, sample-accurate timing at any block size, polymeter and
+polyrhythm, accents, ratchets, chance, nudge, swing, mute and solo, pattern
+chains, quantised pattern changes, scene chains, transport start / stop /
+jumps, a worst-case stress run, and Scatter: exact results for its types,
+quantised engage, a clean return to the pattern on release, and identical
+output at any buffer size for all 100 type / depth combinations.
 
 With `-DBEADWORK_BUILD_TOOLS=ON`:
 
@@ -72,6 +180,40 @@ With `-DBEADWORK_BUILD_TOOLS=ON`:
 ./build/BeadworkSnapshot_artefacts/Release/BeadworkSnapshot --midi 2 2    # print kit 2's output as a grid
 ./build/BeadworkSnapshot_artefacts/Release/BeadworkSnapshot --state-test  # session round trip
 ```
+
+### Continuous integration
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs the same
+configure, build and test steps on macOS (universal), Windows (x64) and Linux
+(x64). It only runs when you start it: on GitHub, open **Actions** →
+**Build** → **Run workflow**, and choose a branch or tag under **Use workflow
+from**.
+
+A run on a branch uploads the packaged plugins as artifacts, kept for 30 days.
+Those are development builds; the downloads for players are on the
+[Releases page](../../releases/latest).
+
+### Making a release
+
+1. Set the version in `CMakeLists.txt`, for example
+   `project(Beadwork VERSION 1.0.0 ...)`.
+2. Write the release text in
+   [`.github/release-notes.md`](.github/release-notes.md).
+3. Commit both, then tag and push:
+
+   ```sh
+   git tag -a v1.0.0 -m "Beadwork 1.0.0"
+   git push origin main v1.0.0
+   ```
+
+4. On GitHub, run the **Build** workflow and pick the `v1.0.0` tag under
+   **Use workflow from**.
+
+A run on a tag builds all three platforms and creates a **draft** release
+with the archives and release notes attached. Review it on the Releases page
+and press **Publish**. A tag that doesn't match the version in
+`CMakeLists.txt` stops the build, so the downloads can't be labelled with the
+wrong version.
 
 ---
 
@@ -206,7 +348,14 @@ automate pattern changes in Live's arrangement.
 
 A scene stores every lane's pattern and mute. Click an empty pad to store the
 current kit into it, click a stored one to recall it, shift-click to
-overwrite. Right-click to rename, clear, or add to the scene chain.
+overwrite. Right-click a scene for:
+
+- **Save all lanes to scene**: stores every lane's pattern and mute (the same
+  as shift-click).
+- **Update current lane in scene**: changes just the focused lane's pattern
+  and mute in that scene, leaving the other eleven as they were. Handy for
+  swapping the hats in CHORUS without touching anything else.
+- **Rename**, **Clear**, and **Add to the scene chain**.
 
 Scene pads light like pattern pads: **amber** is the scene you last recalled or
 stored, and the **green light** means the kit is playing exactly that scene.

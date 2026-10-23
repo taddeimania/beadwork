@@ -167,6 +167,21 @@ void BeadworkProcessor::storeScene (int s)
     store.markDirty();
 }
 
+void BeadworkProcessor::storeSceneLane (int s, int lane)
+{
+    if (! juce::isPositiveAndBelow (s, kNumScenes) || ! juce::isPositiveAndBelow (lane, kNumTracks))
+        return;
+    Scene& sc = store.edit().scenes[(size_t) s];
+    if (! sc.used)
+        return;                                   // nothing to update yet: save all lanes instead
+    lastScene.store (s);
+    sc.pattern[(size_t) lane] = (uint8_t) juce::jlimit (0, kPatternsPerTrack - 1,
+                                                        juce::roundToInt (getParam (ids::pattern (lane))) - 1);
+    const uint16_t bit = (uint16_t) (1u << lane);
+    sc.muted = getParam (ids::mute (lane)) > 0.5f ? (uint16_t) (sc.muted | bit) : (uint16_t) (sc.muted & ~bit);
+    store.markDirty();
+}
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------

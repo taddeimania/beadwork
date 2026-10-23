@@ -261,8 +261,9 @@ The **EDIT** buttons choose what a click or drag on a bead does:
 
 Edits sit on top of the Euclidean figure, so you can keep turning FILLS and
 ROTATE and your edits stay put. **FREEZE** bakes the current figure into
-hand-placed beads. **CLEAR** wipes every edit and keeps the figure. **DICE**
-rolls a new figure. **COPY** / **PASTE** move a whole pattern.
+hand-placed beads. **CLEAR** empties the pattern on screen (no beads, no
+edits); **shift-click CLEAR** wipes only your edits and keeps the figure.
+**DICE** rolls a new figure. **COPY** / **PASTE** move a whole pattern.
 
 ### Necklace
 
@@ -415,11 +416,27 @@ Scatter exchanges steps and changes playback direction and gate length.
 
 ### Kits
 
-The KIT display holds factory starting points (Four To The Floor, Tresillo,
-Bossa Clave, Polymeter Study, Quintuplets, Broken Beat, Chain Demo) and your
-own saves. A kit holds all twelve lanes, every pattern, the chains, the scenes
-and the global knobs. Your kits live in
-`~/Library/Application Support/Beadwork/Presets` as `.beadwork` files.
+The KIT display holds factory starting points and your own saves. A kit holds
+all twelve lanes, every pattern, the chains, the scenes and the global knobs.
+Your kits live in `~/Library/Application Support/Beadwork/Presets` as
+`.beadwork` files.
+
+- **Empty** starts from nothing: no beads, no lane names (they show as Lane 1
+  to Lane 12), and the lanes on C1 to B1, the first twelve pads of any drum
+  rack, so they line up with whatever kit you load. Double-click a lane's name
+  to label it after its pad.
+- **Init Kit** names the lanes for a standard kit on the General MIDI drum
+  notes, with a simple groove on kick, rim, snare and hats.
+- **Four To The Floor, Tresillo, Bossa Clave, Polymeter Study, Quintuplets,
+  Broken Beat, Chain Demo** are worked examples.
+
+### Tooltips
+
+Hover over any control for a short explanation. The **TIPS** button at the
+top turns them off (or back on). It's remembered for every Beadwork in every
+set, in `~/Library/Application Support/Beadwork/Beadwork.settings`
+(`%APPDATA%\Beadwork` on Windows, `~/.config/Beadwork` on Linux). The value
+bubbles that show while you turn a knob stay either way.
 
 ---
 

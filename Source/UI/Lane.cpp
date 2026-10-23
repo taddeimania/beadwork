@@ -228,7 +228,8 @@ void gestureUp (BeadGesture& gs, Pattern& p, Layer l, const MouseEvent& e)
 String laneName (LaneHost& h, int lane)
 {
     const auto& n = h.project().tracks[(size_t) lane].name;
-    return String::fromUTF8 (n.data(), (int) strnlen (n.data(), kNameChars));
+    const auto name = String::fromUTF8 (n.data(), (int) strnlen (n.data(), kNameChars));
+    return name.isNotEmpty() ? name : "Lane " + String (lane + 1);   // the Empty kit's lanes have no names
 }
 } // namespace
 

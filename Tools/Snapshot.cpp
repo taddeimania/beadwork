@@ -54,7 +54,7 @@ int main (int argc, char** argv)
     if (first == "--state-test")
     {
         auto a = std::make_unique<BeadworkProcessor>();
-        a->presets.loadIndex (7); // Chain Demo
+        a->presets.loadIndex (8); // Chain Demo
         auto& pr = a->store.edit();
         pr.tracks[3].patterns[5].nudge[7] = -17;
         pr.tracks[3].patterns[5].forceOn = 0x80000001u;

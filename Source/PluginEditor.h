@@ -4,6 +4,7 @@
 #include <optional>
 
 #include "PluginProcessor.h"
+#include "Settings.h"
 #include "UI/Bank.h"
 #include "UI/Lane.h"
 #include "UI/Widgets.h"
@@ -31,6 +32,10 @@ public:
     bool playingShown (int lane) override;
     float flash (int lane) override { return flashes[(size_t) lane]; }
     beadwork::ui::Layer layer() override { return currentLayer; }
+    // TIPS: the editor shows or hides its tooltip window when told.
+    std::function<void (bool)> onTooltips;
+    void syncTooltips();
+
     void setLayer (beadwork::ui::Layer l)
     {
         currentLayer = l;
@@ -117,6 +122,9 @@ private:
     // Header
     beadwork::ui::ChoiceDisplay presetDisplay;
     beadwork::ui::PanelButton prevBtn { "<" }, nextBtn { ">" };
+    beadwork::ui::PanelButton tipsBtn { "TIPS" };
+    int tooltipsApplied = -1;   // what onTooltips was last told: -1 not yet
+    beadwork::Settings settings;   // per-user preferences, shared by every open Beadwork
     beadwork::ui::PanelButton restartBtn { "RESTART" }, rerollBtn { "REROLL" }, muteAllBtn { "MUTE ALL" };
 
     // Scatter
@@ -149,7 +157,7 @@ public:
 
 private:
     BeadworkPanel panel;
-    juce::TooltipWindow tooltips { this, 700 };
+    std::unique_ptr<juce::TooltipWindow> tooltips;   // null while TIPS is off
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BeadworkEditor)
 };

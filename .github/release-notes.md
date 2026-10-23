@@ -1,15 +1,16 @@
-The first release of Beadwork, a Euclidean drum sequencer that plays a drum rack in Ableton Live (or any VST3 host that routes plugin MIDI).
+Beadwork 1.1.0: a blank slate to start from, a CLEAR that really clears, and a switch for the tooltips.
 
-### What's in it
-- **Twelve lanes, one per drum pad.** Each lane spreads its beads as evenly as possible round a necklace of up to 32 steps (Bjorklund's algorithm). Turn STEPS, FILLS and ROTATE and every setting is a rhythm: tresillo, cinquillo, the bossa nova clave and the rest are all in there.
-- **Hand edits on top of the figure.** Add or remove beads, accent them, ratchet them (1 to 8 hits in a step), give them a chance of playing, nudge them early or late, set their own velocity. Keep turning FILLS and ROTATE and your edits stay put; FREEZE bakes them in.
-- **Polymeter and polyrhythm.** Lanes can run different step lengths and drift against each other, or squeeze their steps into a set number of bars so a 5 against a 4 comes round together.
-- **Sixteen patterns per lane, with chains.** Each lane plays its own chain (pattern 1 three times, then a fill, say), and pattern changes land on the beat or the bar. Copy and paste a pattern on one lane or across all twelve at once.
-- **Sixteen scenes and a scene chain.** A scene snapshots which pattern every lane is on and what's muted; the scene chain plays scenes for a set number of bars, once or on a loop, following Live's song position.
-- **Scatter.** A performance effect after the one on Roland's TR-8 and TR-8S: ten types and ten depths that rearrange what you hear (stutter, reverse, half and double time, rolls, tape stop, gate and more) without touching the pattern. Tap to latch, hold for a throw.
-- **Feel.** Swing with an accent on the first or second note of each pair, humanise, a global chance knob, and a clock divider. The "random" parts repeat exactly until you REROLL.
-- **Kits.** Seven factory starting points, plus your own saved as files holding every lane, pattern, chain and scene. Lanes default to the General MIDI drum notes, which is where Live's drum racks put their pads.
-- **Two PDF guides** in the download: getting a drum kit wired up in Live, and how patterns, chains and scenes fit together.
+### New
+- **Empty kit.** The first kit in the list has no beads and no lane names. Its lanes sit on C1 to B1, the first twelve pads of any drum rack, so you can build from nothing instead of chiselling a preset down.
+- **TIPS button** in the header turns the hover tooltips on and off. Beadwork remembers the choice across sessions and Live sets, and every open Beadwork follows it.
+- **Scene menu.** "Save all lanes to scene" replaces "Overwrite with the current lanes". The new "Update current lane in scene" changes one lane in a stored scene and leaves the other eleven alone.
+- **Copy all lanes / Paste all lanes** in the pattern pad's right-click menu copies a slot from all twelve lanes in one go.
+- **Scene pads light up** the way pattern pads do: amber for the one you picked, green while it's playing.
+
+### Changed
+- **CLEAR empties the pattern.** It sets the fills to zero, the rotate to zero and wipes your hand edits. **Shift-click** CLEAR to wipe only the edits and keep the Euclidean figure, which is what CLEAR used to do.
+- **Chain "+"** adds the pattern you've highlighted, not pattern 1.
+- A lane with no name shows "Lane N".
 
 ### Install
 Download the file for your system below.

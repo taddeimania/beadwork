@@ -27,6 +27,13 @@ String laneNameOf (const Track& t)
 {
     return String::fromUTF8 (t.name.data(), (int) strnlen (t.name.data(), kNameChars));
 }
+
+// What a lane is called on screen: its name, or "Lane N" if it hasn't got one.
+String laneLabel (const Project& p, int lane)
+{
+    const auto name = laneNameOf (p.tracks[(size_t) lane]);
+    return name.isNotEmpty() ? name : "Lane " + String (lane + 1);
+}
 } // namespace
 
 // ===========================================================================
@@ -76,12 +83,21 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
                    edited();
                });
     addButton (clearBtn,  { kLanesX + 146, kLayerY, 64, 30 },
-               "Clear every per-step edit (beads, accents, ratchets, chance, nudge, velocity) and keep the figure.",
-               [this] (const juce::ModifierKeys&)
+               "Empty this pattern: no beads, no edits (steps, step length and the knobs stay). "
+               "Shift-click to clear only your edits and keep the Euclidean figure.",
+               [this] (const juce::ModifierKeys& m)
                {
                    auto& pt = editing();
+                   // Either way, every per-step edit goes.
                    pt.forceOn = pt.forceOff = pt.accents = 0;
                    pt.ratchet.fill (0); pt.stepChance.fill (0); pt.stepVel.fill (0); pt.nudge.fill (0);
+                   if (! m.isShiftDown())
+                   {
+                       pt.fills  = 0;   // ... and so does the figure: an empty pattern
+                       pt.rotate = 0;
+                   }
+                   statusText  = m.isShiftDown() ? "Edits cleared" : "Pattern cleared";
+                   statusTicks = 45;
                    edited();
                });
     addButton (copyBtn,   { kLanesX + 790, kLayerY, 42, 30 }, "Copy this pattern.",
@@ -419,6 +435,14 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
     presetDisplay.onOpen  = [this] { openPresetMenu(); };
     presetDisplay.setTooltip ("Kits: factory starting points and your own saves. Each one holds all twelve lanes, "
                               "every pattern, the chains and the scenes.");
+    addButton (tipsBtn, { 884, 24, 56, 26 },
+               "Tooltips on or off. Remembered for every Beadwork, in every set.",
+               [this] (const juce::ModifierKeys&)
+               {
+                   settings.setTooltipsEnabled (! settings.tooltipsEnabled());
+                   syncTooltips();
+               });
+    tipsBtn.setFontHeight (11.0f);
     addButton (prevBtn, { 1008, 20, 34, 34 }, "Previous kit", [this] (const juce::ModifierKeys&) { proc.presets.step (-1); });
     addButton (nextBtn, { 1350, 20, 34, 34 }, "Next kit",     [this] (const juce::ModifierKeys&) { proc.presets.step (1); });
 
@@ -589,6 +613,19 @@ int BeadworkPanel::editPattern (int lane)
     if (chained && proc.isRunning() && ! pinned[(size_t) lane])
         return juce::jlimit (0, kPatternsPerTrack - 1, proc.playingPattern (lane));
     return juce::jlimit (0, kPatternsPerTrack - 1, juce::roundToInt (proc.getParam (ids::pattern (lane))) - 1);
+}
+
+void BeadworkPanel::syncTooltips()
+{
+    // The setting is shared by every Beadwork, so this also picks up a change
+    // made in another open window.
+    const bool on = settings.tooltipsEnabled();
+    tipsBtn.setLit (on);
+    if (onTooltips && (int) on != tooltipsApplied)
+    {
+        tooltipsApplied = on ? 1 : 0;
+        onTooltips (on);
+    }
 }
 
 bool BeadworkPanel::scenePlaying (int scene)
@@ -846,7 +883,7 @@ void BeadworkPanel::sceneMenu (int scene)
     m.addItem (1, "Recall", used);
     m.addSeparator();
     m.addItem (2, "Save all lanes to scene");
-    m.addItem (6, "Update current lane (" + laneNameOf (focusedTrack()) + ") in scene", used);
+    m.addItem (6, "Update current lane (" + laneLabel (project(), focus) + ") in scene", used);
     m.addSeparator();
     m.addItem (3, "Rename...", used);
     m.addItem (4, "Clear", used);
@@ -869,7 +906,7 @@ void BeadworkPanel::sceneMenu (int scene)
                                  break;
                              case 6:
                                  safe->proc.storeSceneLane (scene, safe->focus);
-                                 safe->statusText  = "Updated " + laneNameOf (safe->focusedTrack()).toUpperCase()
+                                 safe->statusText  = "Updated " + laneLabel (safe->project(), safe->focus).toUpperCase()
                                                    + " in scene " + String (scene + 1);
                                  safe->statusTicks = 45;
                                  break;
@@ -1075,6 +1112,7 @@ void BeadworkPanel::timerCallback()
     playBtn.setLit (project().sceneMode == kPlayOnce);
     loopBtn.setLit (project().sceneMode == kPlayLoop);
     muteAllBtn.setLit (proc.getParam (ids::masterMute) > 0.5f);
+    syncTooltips();
     scatterBtn.setLit (proc.getParam (ids::scatter) > 0.5f);
     pasteBtn.setLit (false);
 
@@ -1103,11 +1141,10 @@ void BeadworkPanel::paint (juce::Graphics& g)
     drawText (g, "KIT", { 960.0f, 20.0f, 44.0f, 34.0f }, 13.0f, colours::ink, true, juce::Justification::centredRight);
 
     // Sections.
-    const auto& tr = focusedTrack();
     drawSection (g, kLanesBox, "LANES");
     drawSection (g, kNecklaceBox, "NECKLACE");
     drawSection (g, kFeelBox, "FEEL");
-    drawSection (g, kPatternsBox, "PATTERNS  /  " + laneNameOf (tr).toUpperCase());
+    drawSection (g, kPatternsBox, "PATTERNS  /  " + laneLabel (project(), focus).toUpperCase());
     drawSection (g, kScenesBox, "SCENES");
     drawSection (g, kTransportBox, "TRANSPORT");
 
@@ -1135,7 +1172,7 @@ void BeadworkPanel::paint (juce::Graphics& g)
     else
     {
         const int step = proc.playingStep (focus);
-        headline = laneNameOf (tr).toUpperCase() + "  P" + String (proc.playingPattern (focus) + 1) + "  "
+        headline = laneLabel (project(), focus).toUpperCase() + "  P" + String (proc.playingPattern (focus) + 1) + "  "
             + String (step + 1).paddedLeft ('0', 2);
         subline = proc.sceneChainRunning() ? "SCENE " + String (proc.scene() + 1) + "   SLOT " + String (proc.sceneSlot() + 1)
                                          : String ("PLAYING");
@@ -1166,6 +1203,18 @@ BeadworkEditor::BeadworkEditor (BeadworkProcessor& p)
     : AudioProcessorEditor (p), panel (p)
 {
     addAndMakeVisible (panel);
+
+    // Tooltips come and go with the TIPS button (a setting saved for every
+    // Beadwork). Knob value bubbles aren't tooltips and always show.
+    panel.onTooltips = [this] (bool on)
+    {
+        if (on && tooltips == nullptr)
+            tooltips = std::make_unique<juce::TooltipWindow> (this, 700);
+        else if (! on)
+            tooltips.reset();
+    };
+    panel.syncTooltips();
+
     setResizable (true, true);
     const double ratio = (double) BeadworkPanel::designW / BeadworkPanel::designH;
     setResizeLimits (960, (int) (960 / ratio), 2600, (int) (2600 / ratio));

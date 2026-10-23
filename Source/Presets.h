@@ -44,6 +44,21 @@ inline const std::vector<FactoryPreset>& factoryPresets()
 {
     using namespace detail;
     static const std::vector<FactoryPreset> presets {
+        { "Empty", 50, 1, [] (Project& p)
+        {
+            // Nothing assumed: no beads, no names, and the lanes on C1 to B1,
+            // the first twelve pads of any drum rack, whatever kit is loaded.
+            for (int i = 0; i < kNumTracks; ++i)
+            {
+                Track& t = p.tracks[(size_t) i];
+                t.note = (uint8_t) (36 + i);
+                t.name.fill (0);
+                Pattern blank;
+                blank.fills = 0;
+                t.patterns.fill (blank);
+            }
+        } },
+
         { "Init Kit", 50, 1, [] (Project&) {} },
 
         { "Four To The Floor", 54, 1, [] (Project& p)

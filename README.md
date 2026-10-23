@@ -186,9 +186,15 @@ Right-click to copy, paste, clear, copy to every slot, or add to the chain.
 
 **CHAIN** turns the lane's chain on. Each slot plays its pattern N times, then
 moves on, and the chain loops. Drag a slot's top half to change its pattern,
-its bottom half to change the repeats; click a slot for insert / delete; **+**
-and **-** lengthen and shorten the chain. While a chain plays, the lane shows
-the pattern that's playing.
+its bottom half to change the repeats; click a slot for insert / delete. **+**
+adds the highlighted pattern (the amber pad) to the end of the chain, and **-**
+removes the last slot, so a quick way to build a chain is: click a pad, press
+**+**, click the next, press **+**.
+
+While a chain plays, the lane shows the pattern that's playing. Click any of
+the lane's pads to look at and edit that one instead (and to pick it for **+**);
+the lane goes back to following the chain the next time you press play, or
+when you turn CHAIN on.
 
 Each lane's pattern is also a host parameter (**Lane N Pattern**), so you can
 automate pattern changes in Live's arrangement.

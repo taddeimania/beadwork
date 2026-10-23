@@ -273,18 +273,26 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
             return;
         }
         proc.setParam (ids::pattern (focus), (float) (i + 1));
+        pinned[(size_t) focus] = true;   // stay on the pad you clicked, even while a chain plays
     };
     patternPads.onMenu = [this] (int i) { patternMenu (i); };
     addAndMakeVisible (patternPads);
 
     addButton (chainBtn, { 370, kBankY + 6, 70, 20 },
                "Chain this lane's patterns: each slot plays its pattern N times, then moves on.",
-               [this] (const juce::ModifierKeys&) { auto& t = focusedTrack(); t.chainOn = t.chainOn ? 0 : 1; edited(); });
+               [this] (const juce::ModifierKeys&)
+               {
+                   auto& t = focusedTrack();
+                   t.chainOn = t.chainOn ? 0 : 1;
+                   pinned[(size_t) focus] = false;   // turning a chain on means "show me the chain"
+                   edited();
+               });
     chainBtn.setFontHeight (11.0f);
 
     laneChain.setBounds (24, kBankY + 118, 416, 54);
-    laneChain.setTooltip ("The lane's chain. Drag a slot's top half for the pattern, its bottom half for how many "
-                          "times it repeats. Click a slot for more.");
+    laneChain.setTooltip ("The lane's chain. + adds the highlighted pattern to the end, - removes the last slot. "
+                          "Drag a slot's top half for the pattern, its bottom half for how many times it repeats. "
+                          "Click a slot for more.");
     laneChain.maxLength  = kMaxChain;
     laneChain.getLength  = [this] { return juce::jlimit (1, kMaxChain, (int) focusedTrack().chainLen); };
     laneChain.itemText   = [this] (int s) { return "P" + String (focusedTrack().chainPattern[(size_t) s] + 1); };
@@ -304,8 +312,10 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
     };
     laneChain.setLength = [this] (int n)
     {
+        // + adds the pattern that's highlighted (the amber pad); - drops the last slot.
         auto& t = focusedTrack();
-        for (int i = t.chainLen; i < n; ++i) { t.chainPattern[(size_t) i] = t.chainPattern[(size_t) juce::jmax (0, i - 1)]; t.chainRepeats[(size_t) i] = 1; }
+        const auto highlighted = (uint8_t) editPattern (focus);
+        for (int i = t.chainLen; i < n; ++i) { t.chainPattern[(size_t) i] = highlighted; t.chainRepeats[(size_t) i] = 1; }
         t.chainLen = (uint8_t) n;
         edited();
     };
@@ -560,10 +570,12 @@ int BeadworkPanel::editPattern (int lane)
 {
     // While a chain (the lane's own, or the scene chain) is choosing the
     // pattern, the screen follows what's playing so there's a playhead to
-    // watch and the beads you touch are the ones you hear. Otherwise it shows
-    // the pattern you picked, even while that change waits for its bar line.
+    // watch and the beads you touch are the ones you hear -- until you click
+    // one of the lane's pads, which pins the screen to that pad until the next
+    // time you press play. Otherwise it shows the pattern you picked, even
+    // while that change waits for its bar line.
     const bool chained = project().tracks[(size_t) lane].chainOn != 0 || proc.sceneChainRunning();
-    if (chained && proc.isRunning())
+    if (chained && proc.isRunning() && ! pinned[(size_t) lane])
         return juce::jlimit (0, kPatternsPerTrack - 1, proc.playingPattern (lane));
     return juce::jlimit (0, kPatternsPerTrack - 1, juce::roundToInt (proc.getParam (ids::pattern (lane))) - 1);
 }
@@ -934,6 +946,12 @@ void BeadworkPanel::timerCallback()
 {
     proc.store.publishIfDirty();
     ++tick;
+
+    // Pressing play goes back to following the chains.
+    const bool runningNow = proc.isRunning();
+    if (runningNow && ! wasRunning)
+        pinned.fill (false);
+    wasRunning = runningNow;
 
     // Hit flashes.
     for (int t = 0; t < kNumTracks; ++t)

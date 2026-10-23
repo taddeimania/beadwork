@@ -125,6 +125,8 @@ private:
     std::unique_ptr<SliderAttachment> levelAttachment;
 
     std::array<float, beadwork::kNumTracks> flashes {};
+    std::array<bool, beadwork::kNumTracks> pinned {};   // a pad was clicked: don't follow the chain
+    bool wasRunning = false;
     std::array<int, beadwork::kNumTracks> lastHits {};
     float pulse = 0.0f;
     int   tick = 0;

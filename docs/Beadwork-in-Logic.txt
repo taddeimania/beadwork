@@ -1,0 +1,65 @@
+BEADWORK IN LOGIC PRO
+=====================
+
+Beadwork MIDI FX is Beadwork built for Logic's MIDI FX slot. It's the same
+sequencer as the VST3 for Ableton Live: same panel, same grooves and kit maps
+(your saves are shared between the two).
+
+INSTALL
+-------
+1. Move "Beadwork MIDI FX.component" into
+
+       ~/Library/Audio/Plug-Ins/Components
+
+   (In Finder: Go > Go to Folder..., paste the path.)
+
+2. The build isn't signed with an Apple developer certificate, so clear the
+   download quarantine or Logic won't load it. In Terminal:
+
+       xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/"Beadwork MIDI FX.component"
+
+3. Open Logic. It checks new plug-ins when it starts. If Beadwork doesn't show
+   up, open Logic Pro > Settings > Plug-in Manager, select Beadwork MIDI FX and
+   click "Reset & Rescan Selection".
+
+WIRE IT UP
+----------
+1. Make a Software Instrument track with Drum Machine Designer or Drum Kit
+   Designer on it.
+2. Click the track's MIDI FX slot (just above the instrument slot) and choose
+   Audio Units > Taddei > Beadwork MIDI FX.
+3. Press play. Beadwork follows Logic's transport, so it only runs while Logic
+   plays.
+
+No second track and no MIDI routing: the MIDI FX slot feeds Beadwork's notes
+straight into the instrument below it.
+
+MATCH LANES TO PADS
+-------------------
+Pick a kit map from KIT MAP at the top of the panel:
+
+- Drum Kit Designer uses the General MIDI drum notes: choose "General MIDI".
+- Drum Machine Designer's pads run upwards from C1: choose "Chromatic C1-B1",
+  then double-click each lane's name to label it after its pad.
+
+Then KIT MAP > Save as..., named after the kit, so you only do this once.
+Logic names notes the same way Beadwork does (middle C is C3, so C1 is MIDI 36).
+
+RECORD WHAT IT PLAYS
+--------------------
+Logic records what arrives at a track, not what comes out of its MIDI FX slot.
+To capture Beadwork's notes as a MIDI region, send them to a second track:
+
+1. On the Beadwork track, click the empty MIDI FX slot below Beadwork and
+   choose "Record MIDI to Track Here", so what's sent is Beadwork's output.
+2. Make a second Software Instrument track with the same drum kit.
+3. In that track's inspector, set "Internal MIDI In" to
+   MIDI to Track > (the Beadwork track).
+4. Record-enable the second track and record while Logic plays.
+
+Mute or remove the instrument on the first track if you only want to hear the
+second. Apple's guide: "Route MIDI internally to software instrument tracks in
+Logic Pro for Mac".
+
+The patterns, chains and scenes work exactly as in the guide
+"Beadwork-Patterns-and-Scenes.pdf", which came in this download.

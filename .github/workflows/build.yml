@@ -8,6 +8,9 @@
 #   created with the three archives attached and the text from
 #   .github/release-notes.md. Review it on the Releases page and publish.
 #   The tag must match project(Beadwork VERSION ...) in CMakeLists.txt.
+#
+# The Audio Unit for Logic Pro has its own workflow and releases
+# (build-logic.yml, logic-v1.2.3 tags).
 
 name: Build
 
@@ -82,7 +85,7 @@ jobs:
           extra=()
           case "$RUNNER_OS" in
             Windows) extra+=(-A x64) ;;
-            macOS)   extra+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64") ;;
+            macOS)   extra+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DBEADWORK_BUILD_AU=OFF) ;;   # the Logic AU has its own workflow
           esac
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \

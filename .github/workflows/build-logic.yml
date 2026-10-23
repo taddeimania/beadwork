@@ -1,0 +1,153 @@
+# Builds Beadwork MIDI FX, the Audio Unit for Logic Pro, on macOS. Runs only
+# when you start it: Actions tab -> "Build (Logic AU)" -> "Run workflow", then
+# pick what to build in "Use workflow from".
+#
+# - A branch (e.g. main): build, validate with Apple's auval, and keep the
+#   packaged component as a run artifact for 30 days.
+# - A Logic tag (logic-v1.2.3): the same, then a *draft* GitHub release of its
+#   own, "Beadwork for Logic 1.2.3", with the text from
+#   .github/release-notes-logic.md. It isn't marked as the latest release, so
+#   the VST3 release stays on top. The tag's version must match
+#   project(Beadwork VERSION ...) in CMakeLists.txt.
+#
+# The VST3 builds and their releases (v1.2.3 tags) are in build.yml.
+
+name: Build (Logic AU)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-logic-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JUCE_VERSION: "8.0.9"
+
+jobs:
+  build:
+    name: macOS (AU)
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/logic-v')
+        run: |
+          version=$(sed -n 's/^project(Beadwork VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          if [ "logic-v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match CMakeLists.txt (VERSION $version). Expected logic-v$version."
+            exit 1
+          fi
+
+      - name: Restore JUCE
+        id: juce-cache
+        uses: actions/cache@v6
+        with:
+          path: .juce
+          key: juce-${{ env.JUCE_VERSION }}-${{ runner.os }}
+
+      - name: Download JUCE
+        if: steps.juce-cache.outputs.cache-hit != 'true'
+        run: git clone --depth 1 --branch "$JUCE_VERSION" https://github.com/juce-framework/JUCE.git .juce
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DBEADWORK_COPY_PLUGIN=OFF \
+            -DBEADWORK_BUILD_AU=ON \
+            -DBEADWORK_JUCE_DIR=.juce
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4 --target BeadworkMidiFX_AU BeadworkEngineTests
+
+      - name: Test the engine
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      # Logic runs Apple's auval on every new Audio Unit and won't list one
+      # that fails, so fail the build the same way. It's also the only check
+      # this plugin gets before it reaches Logic.
+      - name: Validate with auval
+        run: |
+          comp="build/BeadworkMidiFX_artefacts/Release/AU/Beadwork MIDI FX.component"
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R "$comp" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          # The registrar can take a moment to notice a new component.
+          for i in 1 2 3 4 5 6; do
+            if auval -a | grep -q "aumi Bdmf Tadd"; then break; fi
+            sleep 5
+          done
+          auval -a | grep "Tadd" || { echo "::error::Beadwork MIDI FX wasn't registered."; exit 1; }
+          auval -v aumi Bdmf Tadd
+
+      # Package it ourselves so permissions and the code signature survive the
+      # download. Release builds are named by version only; others also carry
+      # the commit.
+      - name: Package
+        run: |
+          version=$(sed -n 's/^project(Beadwork VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          name="Beadwork-MIDI-FX-${version}-macOS"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then name="${name}-${GITHUB_SHA::7}"; fi
+          stage="$RUNNER_TEMP/$name"
+          mkdir -p "$stage"
+          cp -R "build/BeadworkMidiFX_artefacts/Release/AU/Beadwork MIDI FX.component" "$stage/"
+          cp docs/Beadwork-in-Logic.txt docs/Beadwork-Patterns-and-Scenes.pdf LICENSE "$stage/"
+          ditto -c -k --sequesterRsrc --keepParent "$stage" "$GITHUB_WORKSPACE/$name.zip"
+          echo "ARCHIVE=$name.zip" >> "$GITHUB_ENV"
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+  # Logic tags only: a draft release of its own.
+  release:
+    name: Draft Logic release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/logic-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Collect the build
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+          skip-decompress: true
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dist
+          if find dist -mindepth 1 -maxdepth 1 -type d | grep -q .; then
+            echo "::error::Expected only archives in dist/, found folders."
+            exit 1
+          fi
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --draft \
+              --verify-tag \
+              --latest=false \
+              --title "Beadwork for Logic ${GITHUB_REF_NAME#logic-v}" \
+              --notes-file .github/release-notes-logic.md
+          fi

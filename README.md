@@ -1,6 +1,7 @@
 # Beadwork
 
-A Euclidean drum sequencer, built as a VST3 MIDI generator for Ableton Live.
+A Euclidean drum sequencer, built as a VST3 MIDI generator for Ableton Live,
+and as an Audio Unit MIDI effect for Logic Pro.
 Twelve lanes, one per drum-rack pad. Each lane threads a number of beads as
 evenly as possible round a necklace of steps (Bjorklund's algorithm), and you
 take it from there: turn the necklace, add and remove beads by hand, accent
@@ -36,8 +37,11 @@ Download the archive for your system from the latest release:
 | Windows `.zip` | `Beadwork.vst3` |
 | Linux `.tar.gz` | `Beadwork.vst3` |
 
-Every archive also has the two PDF guides. Beadwork is a MIDI generator, so it
-comes as a VST3 only: there's no Audio Unit or standalone version.
+Every archive also has the two PDF guides. There's no standalone version.
+
+**Logic Pro** loads Audio Units, not VST3, so it has its own download:
+**Beadwork MIDI FX**, on the releases titled *Beadwork for Logic*. See
+[Using it in Logic](#using-it-in-logic).
 
 Then install the plugin:
 
@@ -89,7 +93,10 @@ cmake --build build --config Release -j
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-The build installs `Beadwork.vst3` into `~/Library/Audio/Plug-Ins/VST3`.
+The build installs `Beadwork.vst3` into `~/Library/Audio/Plug-Ins/VST3`, and
+`Beadwork MIDI FX.component`, the Audio Unit for Logic, into
+`~/Library/Audio/Plug-Ins/Components`. Add `-DBEADWORK_BUILD_AU=OFF` to the
+configure step to build the VST3 only.
 
 - It builds for your Mac's own processor. For a universal binary, add
   `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"` to the configure step.
@@ -155,6 +162,7 @@ The build installs the plugin to `~/.vst3/Beadwork.vst3`.
 |---|---|---|
 | `BEADWORK_COPY_PLUGIN` | `ON` (`OFF` on Windows) | Copy the plugin into the system VST3 folder after each build |
 | `BEADWORK_JUCE_DIR` | *(empty)* | Use a local JUCE 8.0.9 checkout instead of downloading one; useful offline |
+| `BEADWORK_BUILD_AU` | `ON` (macOS only) | Also build Beadwork MIDI FX, the Audio Unit for Logic Pro |
 | `BEADWORK_BUILD_TOOLS` | `OFF` | Also build `BeadworkSnapshot`, a headless dev tool (see below) |
 | `CMAKE_OSX_ARCHITECTURES` | your Mac's processor | `"arm64;x86_64"` builds a universal binary |
 
@@ -194,6 +202,12 @@ A run on a branch uploads the packaged plugins as artifacts, kept for 30 days.
 Those are development builds; the downloads for players are on the
 [Releases page](../../releases/latest).
 
+[`.github/workflows/build-logic.yml`](.github/workflows/build-logic.yml) builds
+the Logic Audio Unit on macOS (universal), runs the engine tests, and checks
+the component with Apple's `auval`, the same validation Logic runs before it
+lists a plug-in. Start it the same way: **Actions** → **Build (Logic AU)** →
+**Run workflow**.
+
 ### Making a release
 
 1. Set the version in `CMakeLists.txt`, for example
@@ -216,6 +230,23 @@ and press **Publish**. A tag that doesn't match the version in
 `CMakeLists.txt` stops the build, so the downloads can't be labelled with the
 wrong version.
 
+The Logic Audio Unit is released separately, with its own tag and notes:
+
+1. Write the release text in
+   [`.github/release-notes-logic.md`](.github/release-notes-logic.md).
+2. Tag the same commit with `logic-v` and the version, and push the tag:
+
+   ```sh
+   git tag -a logic-v1.2.0 -m "Beadwork for Logic 1.2.0"
+   git push origin logic-v1.2.0
+   ```
+
+3. Run the **Build (Logic AU)** workflow and pick the `logic-v1.2.0` tag.
+
+That creates a draft release titled *Beadwork for Logic 1.2.0* with the
+component zip attached. It isn't marked as the latest release, so the VST3
+release stays at the top of the Releases page.
+
 ---
 
 ## Using it in Live
@@ -237,6 +268,37 @@ channel. Once the lanes match your rack, save them as a **kit map** (see
 
 Incoming MIDI passes straight through, so you can still play the rack from a
 keyboard on Beadwork's track.
+
+---
+
+## Using it in Logic
+
+Beadwork MIDI FX goes in the **MIDI FX** slot of a Software Instrument track,
+in front of Drum Machine Designer, Drum Kit Designer or any drum instrument.
+
+1. Install `Beadwork MIDI FX.component` into
+   `~/Library/Audio/Plug-Ins/Components` and clear the quarantine flag:
+
+   ```sh
+   xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/"Beadwork MIDI FX.component"
+   ```
+
+2. Open Logic. If Beadwork isn't listed, open **Logic Pro → Settings →
+   Plug-in Manager**, select it and click **Reset & Rescan Selection**.
+3. On a drum track, click the **MIDI FX** slot and choose **Audio Units →
+   Taddei → Beadwork MIDI FX**.
+4. Press play. Beadwork follows Logic's transport.
+
+For Drum Kit Designer pick the **General MIDI** kit map. Drum Machine
+Designer's pads run up from C1, so pick **Chromatic C1-B1** and label the
+lanes. Then save a kit map for that kit. Grooves and kit maps are shared with
+the VST3, so a groove saved in Live loads in Logic.
+
+Logic records what arrives at a track, not what leaves its MIDI FX slot. To
+capture Beadwork's notes as a region, put **Record MIDI to Track Here** in the
+MIDI FX slot below Beadwork, then on a second instrument track set **Internal
+MIDI In** to that track and record there. `docs/Beadwork-in-Logic.txt`, which
+also comes in the download, has the steps.
 
 ---
 

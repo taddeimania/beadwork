@@ -68,22 +68,54 @@ set(BEADWORK_SOURCES
     Source/UI/Lane.cpp
     Source/UI/Bank.cpp)
 
-target_sources(Beadwork PRIVATE ${BEADWORK_SOURCES})
+# The same sources, settings and libraries for both plugins.
+function(beadwork_setup_plugin target)
+    target_sources(${target} PRIVATE ${BEADWORK_SOURCES})
+    target_include_directories(${target} PRIVATE Source)
+    target_compile_definitions(${target} PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0)
+    target_link_libraries(${target}
+        PRIVATE
+            juce::juce_audio_utils
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_lto_flags
+            juce::juce_recommended_warning_flags)
+endfunction()
 
-target_include_directories(Beadwork PRIVATE Source)
+beadwork_setup_plugin(Beadwork)
 
-target_compile_definitions(Beadwork PUBLIC
-    JUCE_WEB_BROWSER=0
-    JUCE_USE_CURL=0
-    JUCE_VST3_CAN_REPLACE_VST2=0)
+# --- Logic Pro: Beadwork MIDI FX (macOS only) ----------------------------------
+# Logic loads Audio Units, not VST3, and its MIDI FX slot takes AU MIDI
+# processors ("aumi"). A plugin is either an instrument (what Live needs) or a
+# MIDI effect (what Logic needs), so this is a second plugin from the same code:
+# same panel, same grooves and kit maps, separate component. It installs into
+# ~/Library/Audio/Plug-Ins/Components when BEADWORK_COPY_PLUGIN is on.
+if(APPLE)
+    option(BEADWORK_BUILD_AU "Also build Beadwork MIDI FX, the Audio Unit for Logic Pro" ON)
+endif()
 
-target_link_libraries(Beadwork
-    PRIVATE
-        juce::juce_audio_utils
-    PUBLIC
-        juce::juce_recommended_config_flags
-        juce::juce_recommended_lto_flags
-        juce::juce_recommended_warning_flags)
+if(APPLE AND BEADWORK_BUILD_AU)
+    juce_add_plugin(BeadworkMidiFX
+        COMPANY_NAME                "Taddei"
+        BUNDLE_ID                   com.taddei.beadwork.midifx
+        PLUGIN_MANUFACTURER_CODE    Tadd
+        PLUGIN_CODE                 Bdmf
+        PRODUCT_NAME                "Beadwork MIDI FX"
+        PLUGIN_NAME                 "Beadwork MIDI FX"
+        DESCRIPTION                 "Euclidean drum sequencer"
+        FORMATS                     AU
+        IS_SYNTH                    FALSE
+        NEEDS_MIDI_INPUT            TRUE
+        NEEDS_MIDI_OUTPUT           TRUE
+        IS_MIDI_EFFECT              TRUE
+        AU_MAIN_TYPE                kAudioUnitType_MIDIProcessor
+        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        COPY_PLUGIN_AFTER_BUILD     ${BEADWORK_COPY_PLUGIN})
+    beadwork_setup_plugin(BeadworkMidiFX)
+endif()
 
 # --- Engine tests (no JUCE needed) --------------------------------------------
 enable_testing()
@@ -101,6 +133,7 @@ if(BEADWORK_BUILD_TOOLS)
     target_include_directories(BeadworkSnapshot PRIVATE Source)
     target_compile_definitions(BeadworkSnapshot PRIVATE
         JucePlugin_Name="Beadwork"
+        JucePlugin_IsMidiEffect=0
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
     target_link_libraries(BeadworkSnapshot PRIVATE
         juce::juce_audio_utils

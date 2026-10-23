@@ -4,7 +4,14 @@
 using namespace beadwork;
 
 BeadworkProcessor::BeadworkProcessor()
+   #if JucePlugin_IsMidiEffect
+    // Logic's MIDI FX slot: MIDI in, MIDI out, no audio at all.
+    : AudioProcessor (BusesProperties()),
+   #else
+    // An instrument with an (always silent) audio output, because hosts want
+    // instruments to have one. Live has no slot for VST3 MIDI effects.
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+   #endif
       apvts (*this, nullptr, "BeadworkState", createParameterLayout())
 {
     for (auto* p : getParameters())
@@ -21,8 +28,12 @@ BeadworkProcessor::BeadworkProcessor()
 
 bool BeadworkProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
+   #if JucePlugin_IsMidiEffect
+    return layouts.inputBuses.isEmpty() && layouts.outputBuses.isEmpty();
+   #else
     const auto out = layouts.getMainOutputChannelSet();
     return out == juce::AudioChannelSet::stereo() || out == juce::AudioChannelSet::mono();
+   #endif
 }
 
 void BeadworkProcessor::prepareToPlay (double, int)
@@ -39,7 +50,7 @@ void BeadworkProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::Mid
     juce::ScopedNoDenormals noDenormals;
 
     const int numSamples = audio.getNumSamples();
-    audio.clear(); // MIDI only; the audio bus exists because hosts want instruments to have one
+    audio.clear(); // MIDI only (the Logic build has no audio channels at all)
 
     // Incoming MIDI passes straight through, so you can still play the rack
     // from a keyboard on Beadwork's track.

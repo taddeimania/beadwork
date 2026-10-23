@@ -252,7 +252,7 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
                "When a newly picked pattern takes over: at once, next step, beat, bar(s), or end of the loop.",
                [this] { return String (kQuantiseNames[(size_t) juce::roundToInt (proc.getParam (ids::quantise))]); },
                [this] { chooseParam (quantiseChoice, ids::quantise); });
-    addChoice (clockChoice, "CLOCK", { kRightX + 10 + gs * 2, gy, gw, 50 }, "Run faster or slower than Live.",
+    addChoice (clockChoice, "CLOCK", { kRightX + 10 + gs * 2, gy, gw, 50 }, "Run faster or slower than the song.",
                [this] { return ids::clockRateNames()[juce::roundToInt (proc.getParam (ids::clockRate))]; },
                [this] { chooseParam (clockChoice, ids::clockRate); });
     addChoice (channelChoice, "MIDI CH", { kRightX + 10 + gs * 3, gy, gw, 50 },
@@ -396,7 +396,7 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
     };
     sceneModeButton (performBtn, sx + 200, kPerform, "Scenes change only when you click them.");
     sceneModeButton (playBtn,    sx + 274, kPlayOnce, "Play the scene chain once from the song start, then hold the last scene.");
-    sceneModeButton (loopBtn,    sx + 348, kPlayLoop, "Loop the scene chain for as long as Live plays.");
+    sceneModeButton (loopBtn,    sx + 348, kPlayLoop, "Loop the scene chain for as long as the song plays.");
 
     sceneChain.setBounds (sx, kBankY + 118, 418, 54);
     sceneChain.setTooltip ("The scene chain, measured from the start of the song. Drag a slot's top half for the "
@@ -1294,7 +1294,11 @@ void BeadworkPanel::paint (juce::Graphics& g)
     g.drawLine (kScatterX, 762.0f, kScatterX, 916.0f, 1.2f);
 
     // One line of routing, the thing everyone asks first.
+   #if JucePlugin_IsMidiEffect
+    drawText (g, "MIDI FX slot  >  in front of Drum Machine Designer",
+   #else
     drawText (g, "MIDI OUT  >  drum rack track, MIDI From: Beadwork",
+   #endif
               { 932.0f, 898.0f, 344.0f, 20.0f }, 12.0f, colours::inkDim, true, juce::Justification::centredLeft);
 }
 

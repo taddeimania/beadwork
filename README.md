@@ -176,9 +176,10 @@ output at any buffer size for all 100 type / depth combinations.
 With `-DBEADWORK_BUILD_TOOLS=ON`:
 
 ```sh
-./build/BeadworkSnapshot_artefacts/Release/BeadworkSnapshot panel.png 6   # render the panel playing kit 6
-./build/BeadworkSnapshot_artefacts/Release/BeadworkSnapshot --midi 2 2    # print kit 2's output as a grid
+./build/BeadworkSnapshot_artefacts/Release/BeadworkSnapshot panel.png 6   # render the panel playing groove 6
+./build/BeadworkSnapshot_artefacts/Release/BeadworkSnapshot --midi 2 2    # print groove 2's output as a grid
 ./build/BeadworkSnapshot_artefacts/Release/BeadworkSnapshot --state-test  # session round trip
+./build/BeadworkSnapshot_artefacts/Release/BeadworkSnapshot --maps-test   # kit maps and grooves stay separate
 ```
 
 ### Continuous integration
@@ -229,8 +230,10 @@ Beadwork makes MIDI, not sound.
 
 Lanes default to the General MIDI drum notes, which is where Live's drum racks
 put their pads: kick C1, rim C#1, snare D1, clap D#1, closed hat F#1, open hat
-A#1, and so on. Click a lane's note to change it. Beadwork sends on channel 10
-by default; each lane can have its own channel.
+A#1, and so on. Click a lane's note to change it, and double-click its name to
+relabel it. Beadwork sends on channel 10 by default; each lane can have its own
+channel. Once the lanes match your rack, save them as a **kit map** (see
+[Kit maps and grooves](#kit-maps-and-grooves)) so you only do this once per rack.
 
 Incoming MIDI passes straight through, so you can still play the rack from a
 keyboard on Beadwork's track.
@@ -414,21 +417,43 @@ does, so a throw you like is a throw you can repeat. The ten types are
 Beadwork's own: the TR-8S manual doesn't document what its types do, only that
 Scatter exchanges steps and changes playback direction and gate length.
 
-### Kits
+### Kit maps and grooves
 
-The KIT display holds factory starting points and your own saves. A kit holds
-all twelve lanes, every pattern, the chains, the scenes and the global knobs.
-Your kits live in `~/Library/Application Support/Beadwork/Presets` as
-`.beadwork` files.
+Beadwork saves two things separately, each with its own display in the header:
 
-- **Empty** starts from nothing: no beads, no lane names (they show as Lane 1
-  to Lane 12), and the lanes on C1 to B1, the first twelve pads of any drum
-  rack, so they line up with whatever kit you load. Double-click a lane's name
-  to label it after its pad.
-- **Init Kit** names the lanes for a standard kit on the General MIDI drum
-  notes, with a simple groove on kick, rim, snare and hats.
+- **KIT MAP** is the wiring: each lane's label, MIDI note and channel. Save one
+  per drum rack ("909 Core Kit", "My Linn rack") and pick it whenever you use
+  that rack.
+- **GROOVE** is everything else: the beads and hand edits, all sixteen patterns
+  per lane, the chains, the scenes, and the feel knobs.
+
+Changing the groove never touches the kit map, and changing the kit map never
+touches the groove, so any groove plays on any rack. A `*` after the map's
+name means you've changed a note, label or channel since loading it; open the
+KIT MAP menu and choose **Save** (or **Save as...**) to keep the change.
+
+Your saves live in `~/Library/Application Support/Beadwork/` (`%APPDATA%\Beadwork`
+on Windows, `~/.config/Beadwork` on Linux): kit maps in `Kit Maps/` as
+`.beadmap` files, grooves in `Grooves/` as `.beadwork` files. Kits saved by
+1.1.0 and earlier (in `Presets/`) are copied into `Grooves/` the first time
+you run this version. They load as grooves, which means their old notes and
+labels are left out.
+
+Factory kit maps:
+
+- **General MIDI**: Kick, Rim, Snare, Clap, hats, toms, Pedal, Crash and Ride
+  on the General MIDI drum notes, which is where Live's own kits put them.
+- **Chromatic C1-B1** and **Chromatic C2-B2**: twelve pads in a row, labelled
+  with their notes.
+
+Factory grooves:
+
+- **Empty** starts from nothing: not a bead anywhere.
+- **Init Groove** is a simple groove on kick, rim, snare and hats.
 - **Four To The Floor, Tresillo, Bossa Clave, Polymeter Study, Quintuplets,
-  Broken Beat, Chain Demo** are worked examples.
+  Broken Beat, Chain Demo** are worked examples. They're written for the
+  General MIDI lane order (lane 1 kick, lane 3 snare, lane 5 closed hat), so
+  they make most sense with a map in that order.
 
 ### Tooltips
 

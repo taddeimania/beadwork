@@ -1,5 +1,7 @@
-// Presets.h — factory starting points. Each one is a recipe applied on top of
-// the starter kit, so lane names and notes stay where a drum rack expects them.
+// Presets.h — factory grooves. Each one is a recipe applied on top of the
+// starter groove. Lane notes, labels and channels belong to the kit map and
+// are put back after the recipe runs, so a groove written for "the kick lane"
+// means lane 1, whatever pad your map sends it to.
 #pragma once
 
 #include <functional>
@@ -46,20 +48,16 @@ inline const std::vector<FactoryPreset>& factoryPresets()
     static const std::vector<FactoryPreset> presets {
         { "Empty", 50, 1, [] (Project& p)
         {
-            // Nothing assumed: no beads, no names, and the lanes on C1 to B1,
-            // the first twelve pads of any drum rack, whatever kit is loaded.
-            for (int i = 0; i < kNumTracks; ++i)
+            // Not a bead anywhere: build from nothing.
+            for (auto& t : p.tracks)
             {
-                Track& t = p.tracks[(size_t) i];
-                t.note = (uint8_t) (36 + i);
-                t.name.fill (0);
                 Pattern blank;
                 blank.fills = 0;
                 t.patterns.fill (blank);
             }
         } },
 
-        { "Init Kit", 50, 1, [] (Project&) {} },
+        { "Init Groove", 50, 1, [] (Project&) {} },
 
         { "Four To The Floor", 54, 1, [] (Project& p)
         {

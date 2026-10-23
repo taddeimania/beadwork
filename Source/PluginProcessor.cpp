@@ -197,11 +197,20 @@ juce::ValueTree BeadworkProcessor::captureState()
     state.appendChild (projectToTree (store.view()), nullptr);
     state.setProperty ("seed", juce::String::toHexString ((juce::int64) seed.load()), nullptr);
     state.setProperty ("presetName", presets.currentName(), nullptr);
+    state.setProperty ("kitMapName", maps.currentName(), nullptr);
     state.setProperty ("stateVersion", 1, nullptr);
     return state;
 }
 
 void BeadworkProcessor::restoreState (const juce::ValueTree& raw)
+{
+    if (! raw.hasType (apvts.state.getType()))
+        return;
+    restoreGroove (raw);
+    maps.restore (raw["kitMapName"].toString());
+}
+
+void BeadworkProcessor::restoreGroove (const juce::ValueTree& raw)
 {
     if (! raw.hasType (apvts.state.getType()))
         return;

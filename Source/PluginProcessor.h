@@ -5,6 +5,7 @@
 
 #include "Engine/Engine.h"
 #include "Params.h"
+#include "DrumMaps.h"
 #include "PresetManager.h"
 #include "State.h"
 
@@ -40,7 +41,8 @@ public:
 
     // --- state (message thread) -------------------------------------------
     juce::ValueTree captureState();
-    void restoreState (const juce::ValueTree&);
+    void restoreState (const juce::ValueTree&);    // a session: groove and kit map
+    void restoreGroove (const juce::ValueTree&);   // a groove file: leaves the kit map's name alone
     void applyFactoryPreset (const beadwork::FactoryPreset&);
 
     // --- actions (message thread) -----------------------------------------
@@ -69,7 +71,8 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     beadwork::ProjectStore  store;
-    beadwork::PresetManager presets { *this };
+    beadwork::PresetManager presets { *this };   // grooves
+    beadwork::MapManager    maps { store };       // kit maps
 
 private:
     std::map<juce::String, std::atomic<float>*> params;

@@ -1,16 +1,14 @@
-Beadwork 1.1.0: a blank slate to start from, a CLEAR that really clears, and a switch for the tooltips.
+Beadwork 1.2.0: your drum rack's wiring and your grooves are now saved separately.
 
 ### New
-- **Empty kit.** The first kit in the list has no beads and no lane names. Its lanes sit on C1 to B1, the first twelve pads of any drum rack, so you can build from nothing instead of chiselling a preset down.
-- **TIPS button** in the header turns the hover tooltips on and off. Beadwork remembers the choice across sessions and Live sets, and every open Beadwork follows it.
-- **Scene menu.** "Save all lanes to scene" replaces "Overwrite with the current lanes". The new "Update current lane in scene" changes one lane in a stored scene and leaves the other eleven alone.
-- **Copy all lanes / Paste all lanes** in the pattern pad's right-click menu copies a slot from all twelve lanes in one go.
-- **Scene pads light up** the way pattern pads do: amber for the one you picked, green while it's playing.
+- **Kit maps.** A new **KIT MAP** selector in the header holds each lane's label, MIDI note and channel. Save one per drum rack and pick it whenever you use that rack. The factory maps are General MIDI (the lane names and notes Beadwork has always opened with), Chromatic C1-B1 and Chromatic C2-B2. A `*` after the map's name means you've changed a note, label or channel since loading it, and **Save** in the map's menu updates one of your maps in place.
+- **Grooves.** What used to be called a kit is now a **GROOVE**: the beads and hand edits, all sixteen patterns per lane, the chains, the scenes and the feel knobs. Loading a groove never touches the kit map, and loading a kit map never touches the groove, so any groove plays on any rack.
 
 ### Changed
-- **CLEAR empties the pattern.** It sets the fills to zero, the rotate to zero and wipes your hand edits. **Shift-click** CLEAR to wipe only the edits and keep the Euclidean figure, which is what CLEAR used to do.
-- **Chain "+"** adds the pattern you've highlighted, not pattern 1.
-- A lane with no name shows "Lane N".
+- **Init Kit** is now **Init Groove**, and **Empty** only clears the beads. It leaves your lane notes and labels alone.
+- Your saves live in `~/Library/Application Support/Beadwork/` (`%APPDATA%\Beadwork` on Windows, `~/.config/Beadwork` on Linux), with kit maps in `Kit Maps/` and grooves in `Grooves/`.
+- **Upgrading:** kits saved by 1.1.0 and earlier are copied from `Presets/` into `Grooves/` the first time you run 1.2.0. They load as grooves, so their old notes and labels are left out; pick or save a kit map for them.
+- The two PDF guides and the README cover kit maps and grooves.
 
 ### Install
 Download the file for your system below.

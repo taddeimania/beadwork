@@ -229,7 +229,7 @@ String laneName (LaneHost& h, int lane)
 {
     const auto& n = h.project().tracks[(size_t) lane].name;
     const auto name = String::fromUTF8 (n.data(), (int) strnlen (n.data(), kNameChars));
-    return name.isNotEmpty() ? name : "Lane " + String (lane + 1);   // the Empty kit's lanes have no names
+    return name.isNotEmpty() ? name : "Lane " + String (lane + 1);   // a kit map can leave a lane unlabelled
 }
 } // namespace
 

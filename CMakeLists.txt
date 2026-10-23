@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 # binary pass -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64". Set before project().
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
 
-project(Beadwork VERSION 1.1.0 LANGUAGES C CXX)
+project(Beadwork VERSION 1.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -60,6 +60,7 @@ set(BEADWORK_SOURCES
     ${BEADWORK_ENGINE_SOURCES}
     Source/State.cpp
     Source/Settings.cpp
+    Source/DrumMaps.cpp
     Source/PresetManager.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp

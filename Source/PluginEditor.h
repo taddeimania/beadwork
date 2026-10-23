@@ -77,6 +77,8 @@ private:
     void attachLevelKnob();
     void openPresetMenu();
     void savePresetAs();
+    void openMapMenu();
+    void saveMapAs();
     void patternMenu (int slot);
     void patternAction (int slot, int choice);   // what each item in patternMenu does
     bool scenePlaying (int scene);               // is the kit playing exactly this scene?
@@ -120,7 +122,7 @@ private:
     beadwork::ui::ChoiceDisplay swingGridChoice, quantiseChoice, clockChoice, channelChoice;
 
     // Header
-    beadwork::ui::ChoiceDisplay presetDisplay;
+    beadwork::ui::ChoiceDisplay presetDisplay, mapDisplay;
     beadwork::ui::PanelButton prevBtn { "<" }, nextBtn { ">" };
     beadwork::ui::PanelButton tipsBtn { "TIPS" };
     int tooltipsApplied = -1;   // what onTooltips was last told: -1 not yet

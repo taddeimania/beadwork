@@ -88,8 +88,65 @@ int main (int argc, char** argv)
                 }
         }
         std::printf ("session round trip: %s (%d bytes of XML)\n", same ? "identical" : "DIFFERENT", (int) mb.getSize());
-        std::printf ("kit name restored: %s\n", b->presets.currentName().toRawUTF8());
+        std::printf ("groove name restored: %s\n", b->presets.currentName().toRawUTF8());
         return same ? 0 : 1;
+    }
+
+    if (first == "--maps-test")
+    {
+        // Kit maps and grooves stay out of each other's way.
+        int fails = 0;
+        auto check = [&] (bool ok, const char* what) { std::printf ("  %s  %s\n", ok ? "ok  " : "FAIL", what); fails += ok ? 0 : 1; };
+        auto name = [] (const beadwork::Track& t) { return juce::String::fromUTF8 (t.name.data()); };
+
+        auto a = std::make_unique<BeadworkProcessor>();
+        const auto& tr = a->store.view().tracks;
+        check (a->maps.currentName() == "General MIDI" && ! a->maps.edited(), "opens on General MIDI, unedited");
+
+        check (a->maps.loadIndex (1), "load Chromatic C1-B1");
+        check (tr[0].note == 36 && tr[3].note == 39 && name (tr[0]) == "C1" && name (tr[1]) == "C#1", "chromatic notes and labels");
+        check (tr[0].patterns[0].fills == 4, "patterns untouched by the map");
+
+        auto& e = a->store.edit();
+        e.tracks[0].note = 35;
+        e.tracks[0].name.fill (0);
+        juce::String ("BD").copyToUTF8 (e.tracks[0].name.data(), 15);
+        e.tracks[2].channel = 10;
+        check (a->maps.edited(), "a lane edit marks the map edited");
+        check (a->maps.saveAs ("Test Rack") && a->maps.currentIsUser() && ! a->maps.edited(), "save as Test Rack");
+
+        check (a->presets.loadIndex (3), "load groove Tresillo");
+        check (tr[0].patterns[0].steps == 8 && tr[0].patterns[0].fills == 3, "groove's beads arrive");
+        check (tr[0].note == 35 && name (tr[0]) == "BD" && tr[2].channel == 10 && tr[5].note == 41, "map survives the groove");
+        check (a->maps.currentName() == "Test Rack" && ! a->maps.edited(), "map name and state unchanged");
+
+        check (a->presets.loadIndex (0), "load groove Empty");
+        check (tr[4].patterns[0].fills == 0 && name (tr[4]) == "E1" && tr[4].note == 40, "Empty keeps the map");
+
+        a->presets.loadIndex (5);
+        check (a->presets.saveAs ("Maps Test Groove"), "save a groove");
+        check (a->maps.loadIndex (0) && tr[0].note == 36 && name (tr[0]) == "Kick", "back to General MIDI");
+        int user = -1;
+        auto all = a->presets.list();
+        for (int i = 0; i < all.size(); ++i) if (all[i].name == "Maps Test Groove") user = i;
+        check (user >= 0 && a->presets.loadIndex (user), "load the saved groove");
+        check (tr[0].note == 36 && name (tr[0]) == "Kick" && tr[2].channel == 0 && a->maps.currentName() == "General MIDI",
+               "a saved groove doesn't bring its old map");
+        check (tr[1].patterns[0].steps == 7, "...but does bring its beads");
+
+        // Session: both come back, and the map isn't flagged edited.
+        a->maps.loadIndex (a->maps.list().size() - 1);
+        juce::MemoryBlock mb;
+        a->getStateInformation (mb);
+        auto b = std::make_unique<BeadworkProcessor>();
+        b->setStateInformation (mb.getData(), (int) mb.getSize());
+        check (b->maps.currentName() == a->maps.currentName() && ! b->maps.edited(), "session restores the map name");
+        check (b->presets.currentName() == "Maps Test Groove", "session restores the groove name");
+        check (std::memcmp (&a->store.view(), &b->store.view(), sizeof (beadwork::Project)) == 0, "session round trip identical");
+        std::printf ("map folder: %s\ngroove folder: %s\n", beadwork::MapManager::mapFolder().getFullPathName().toRawUTF8(),
+                     beadwork::PresetManager::presetFolder().getFullPathName().toRawUTF8());
+        std::printf ("%d failures\n", fails);
+        return fails == 0 ? 0 : 1;
     }
 
     if (first == "--midi")

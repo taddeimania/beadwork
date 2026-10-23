@@ -1,12 +1,13 @@
-// PresetManager.h — factory kits plus user presets saved as files.
+// PresetManager.h — grooves: factory starting points plus your own saved as files.
 //
-// User presets live in   <user app data>/Beadwork/Presets/*.beadwork
-//   macOS:   ~/Library/Application Support/Beadwork/Presets
-//   Windows: %APPDATA%\Beadwork\Presets
-//   Linux:   ~/.config/Beadwork/Presets
-// Each file is the same XML the plugin stores in a session, so a preset carries
-// every lane, all sixteen patterns per lane, the chains, the scenes and the
-// global knobs.
+// Your grooves live in   <user app data>/Beadwork/Grooves/*.beadwork
+//   macOS:   ~/Library/Application Support/Beadwork/Grooves
+//   Windows: %APPDATA%\Beadwork\Grooves
+//   Linux:   ~/.config/Beadwork/Grooves
+// Each file is the same XML the plugin stores in a session: every lane's
+// sixteen patterns, the chains, the scenes and the global knobs. The lane
+// notes, labels and channels are in there too but are ignored on load; those
+// belong to the kit map (DrumMaps.h).
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -50,7 +51,7 @@ public:
 
 private:
     BeadworkProcessor& proc;
-    juce::String current { "Init Kit" };
+    juce::String current { "Init Groove" };
     bool currentUser = false;
 };
 } // namespace beadwork

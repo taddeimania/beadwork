@@ -1,5 +1,6 @@
 #include "PresetManager.h"
 #include "PluginProcessor.h"
+#include "DrumMaps.h"
 
 namespace beadwork
 {
@@ -9,7 +10,16 @@ juce::File PresetManager::presetFolder()
    #if JUCE_MAC
     dir = dir.getChildFile ("Application Support");
    #endif
-    return dir.getChildFile ("Beadwork").getChildFile ("Presets");
+    dir = dir.getChildFile ("Beadwork");
+    auto grooves = dir.getChildFile ("Grooves");
+
+    // Grooves used to be saved as "kits" in Presets/. Bring them across once,
+    // copying rather than moving so an older Beadwork still finds them.
+    auto old = dir.getChildFile ("Presets");
+    if (! grooves.isDirectory() && old.isDirectory() && grooves.createDirectory())
+        for (auto& f : old.findChildFiles (juce::File::findFiles, false, juce::String ("*") + extension))
+            f.copyFileTo (grooves.getChildFile (f.getFileName()));
+    return grooves;
 }
 
 juce::String PresetManager::sanitise (const juce::String& name)
@@ -37,6 +47,10 @@ juce::Array<PresetManager::Entry> PresetManager::list() const
 
 bool PresetManager::load (const Entry& e)
 {
+    // A groove is everything but the wiring: the lanes keep the notes, labels
+    // and channels of whatever kit map is loaded.
+    const DrumMap keep = mapFromProject (proc.store.view());
+
     if (e.factory)
     {
         const auto& factory = factoryPresets();
@@ -49,8 +63,12 @@ bool PresetManager::load (const Entry& e)
         auto xml = juce::XmlDocument::parse (e.file);
         if (xml == nullptr)
             return false;
-        proc.restoreState (juce::ValueTree::fromXml (*xml));
+        proc.restoreGroove (juce::ValueTree::fromXml (*xml));
     }
+    applyMap (proc.store.edit(), keep);
+    proc.store.markDirty();
+    proc.store.publishNow();
+
     current = e.name;
     currentUser = ! e.factory;
     proc.updateHostDisplay (juce::AudioProcessor::ChangeDetails().withProgramChanged (true));
@@ -126,7 +144,7 @@ int PresetManager::currentIndex() const
 
 void PresetManager::restoreName (const juce::String& name)
 {
-    current = name.isNotEmpty() ? name : juce::String ("Init Kit");
+    current = name.isNotEmpty() ? name : juce::String ("Init Groove");
     bool isFactory = false;
     for (auto& p : factoryPresets())
         isFactory = isFactory || current == p.name;

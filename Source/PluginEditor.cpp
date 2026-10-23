@@ -429,13 +429,20 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
     addAndMakeVisible (sceneChain);
 
     // --- header -------------------------------------------------------------------------
+    addAndMakeVisible (mapDisplay);
+    mapDisplay.setBounds (632, 20, 230, 34);
+    mapDisplay.getText = [this] { return proc.maps.currentName() + (proc.maps.edited() ? " *" : ""); };
+    mapDisplay.onOpen  = [this] { openMapMenu(); };
+    mapDisplay.setTooltip ("Kit map: each lane's label and MIDI note (and channel), wired to one drum rack. "
+                           "Save one per rack. Changing groove never changes the map. * means edited since loaded.");
+
     addAndMakeVisible (presetDisplay);
     presetDisplay.setBounds (1046, 20, 300, 34);
     presetDisplay.getText = [this] { return proc.presets.currentName(); };
     presetDisplay.onOpen  = [this] { openPresetMenu(); };
-    presetDisplay.setTooltip ("Kits: factory starting points and your own saves. Each one holds all twelve lanes, "
-                              "every pattern, the chains and the scenes.");
-    addButton (tipsBtn, { 884, 24, 56, 26 },
+    presetDisplay.setTooltip ("Grooves: the beads, patterns, chains, scenes and feel of all twelve lanes. "
+                              "Changing groove keeps your kit map.");
+    addButton (tipsBtn, { 878, 24, 56, 26 },
                "Tooltips on or off. Remembered for every Beadwork, in every set.",
                [this] (const juce::ModifierKeys&)
                {
@@ -443,8 +450,8 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
                    syncTooltips();
                });
     tipsBtn.setFontHeight (11.0f);
-    addButton (prevBtn, { 1008, 20, 34, 34 }, "Previous kit", [this] (const juce::ModifierKeys&) { proc.presets.step (-1); });
-    addButton (nextBtn, { 1350, 20, 34, 34 }, "Next kit",     [this] (const juce::ModifierKeys&) { proc.presets.step (1); });
+    addButton (prevBtn, { 1008, 20, 34, 34 }, "Previous groove", [this] (const juce::ModifierKeys&) { proc.presets.step (-1); });
+    addButton (nextBtn, { 1350, 20, 34, 34 }, "Next groove",     [this] (const juce::ModifierKeys&) { proc.presets.step (1); });
 
     addButton (restartBtn, { 932, 852, 108, 40 }, "Restart every lane and chain from the top on the next beat.",
                [this] (const juce::ModifierKeys&) { proc.requestRestart(); });
@@ -757,8 +764,8 @@ void BeadworkPanel::openPresetMenu()
     }
     m.addSeparator();
     m.addItem (9001, "Save as...");
-    m.addItem (9002, "Delete this kit", proc.presets.currentIsUser());
-    m.addItem (9003, "Reveal kit folder");
+    m.addItem (9002, "Delete this groove", proc.presets.currentIsUser());
+    m.addItem (9003, "Reveal groove folder");
 
     auto safe = juce::Component::SafePointer<BeadworkPanel> (this);
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&presetDisplay).withMinimumWidth (260),
@@ -792,7 +799,8 @@ void BeadworkPanel::openPresetMenu()
 
 void BeadworkPanel::savePresetAs()
 {
-    auto* w = new juce::AlertWindow ("Save kit", "Name these twelve lanes, their patterns, chains and scenes.",
+    auto* w = new juce::AlertWindow ("Save groove", "Name the beads, patterns, chains and scenes of all twelve lanes. "
+                                     "The kit map (notes and labels) is saved separately.",
                                      juce::MessageBoxIconType::NoIcon, this);
     w->addTextEditor ("name", proc.presets.currentName(), "Name");
     w->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
@@ -806,6 +814,97 @@ void BeadworkPanel::savePresetAs()
         if (safe == nullptr || result == 0)
             return;
         safe->statusText = safe->proc.presets.saveAs (name) ? "Saved" : "Could not save";
+        safe->statusTicks = 60;
+    }), false);
+}
+
+void BeadworkPanel::openMapMenu()
+{
+    juce::PopupMenu m;
+    const auto entries = proc.maps.list();
+    const int cur = proc.maps.currentIndex();
+
+    m.addSectionHeader ("Factory");
+    bool inUser = false;
+    for (int i = 0; i < entries.size(); ++i)
+    {
+        if (! entries[i].factory && ! inUser)
+        {
+            m.addSectionHeader ("Yours");
+            inUser = true;
+        }
+        m.addItem (i + 1, entries[i].name, true, i == cur);
+    }
+    if (! inUser)
+    {
+        m.addSectionHeader ("Yours");
+        m.addItem (-1, "(none saved yet)", false, false);
+    }
+    m.addSeparator();
+    m.addItem (9001, proc.maps.currentIsUser() ? "Save" : "Save as...");
+    if (proc.maps.currentIsUser())
+        m.addItem (9004, "Save as...");
+    m.addItem (9002, "Delete this map", proc.maps.currentIsUser());
+    m.addItem (9003, "Reveal kit map folder");
+
+    auto safe = juce::Component::SafePointer<BeadworkPanel> (this);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&mapDisplay).withMinimumWidth (240),
+                     [safe] (int r)
+                     {
+                         if (safe == nullptr || r <= 0)
+                             return;
+                         auto& mm = safe->proc.maps;
+                         if (r == 9001 && mm.currentIsUser())
+                         {
+                             safe->statusText = mm.saveAs (mm.currentName()) ? "Map saved" : "Could not save";
+                             safe->statusTicks = 60;
+                             return;
+                         }
+                         if (r == 9001 || r == 9004) { safe->saveMapAs(); return; }
+                         if (r == 9002)
+                         {
+                             const auto all = mm.list();
+                             const int i = mm.currentIndex();
+                             if (juce::isPositiveAndBelow (i, all.size()) && mm.remove (all[i]))
+                             {
+                                 safe->statusText = "Map deleted";
+                                 safe->statusTicks = 45;
+                             }
+                             return;
+                         }
+                         if (r == 9003)
+                         {
+                             auto folder = MapManager::mapFolder();
+                             folder.createDirectory();
+                             folder.revealToUser();
+                             return;
+                         }
+                         if (mm.loadIndex (r - 1))
+                         {
+                             safe->statusText = "Map: " + mm.currentName();
+                             safe->statusTicks = 45;
+                             safe->repaint();
+                         }
+                     });
+}
+
+void BeadworkPanel::saveMapAs()
+{
+    auto* w = new juce::AlertWindow ("Save kit map", "Name the twelve lane labels and MIDI notes, "
+                                     "e.g. after the drum rack they play.",
+                                     juce::MessageBoxIconType::NoIcon, this);
+    w->addTextEditor ("name", proc.maps.currentIsUser() ? proc.maps.currentName() : String(), "Name");
+    w->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    w->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+    auto safe = juce::Component::SafePointer<BeadworkPanel> (this);
+    w->enterModalState (true, juce::ModalCallbackFunction::create ([safe, w] (int result)
+    {
+        const auto name = w->getTextEditorContents ("name");
+        std::unique_ptr<juce::AlertWindow> owned (w);
+        if (safe == nullptr || result == 0)
+            return;
+        safe->statusText = safe->proc.maps.saveAs (name) ? "Map saved" : "Could not save";
         safe->statusTicks = 60;
     }), false);
 }
@@ -1102,7 +1201,7 @@ void BeadworkPanel::timerCallback()
         k->sync();
 
     for (auto* c : { &divisionChoice, &fitChoice, &barsChoice, &directionChoice, &runChoice, &laneChannelChoice,
-                     &swingGridChoice, &quantiseChoice, &clockChoice, &channelChoice, &presetDisplay })
+                     &swingGridChoice, &quantiseChoice, &clockChoice, &channelChoice, &presetDisplay, &mapDisplay })
         c->refresh();
 
     for (int i = 0; i < 6; ++i)
@@ -1136,9 +1235,10 @@ void BeadworkPanel::paint (juce::Graphics& g)
     drawScrewSlot (g, { (float) designW - 50.0f, 37.0f });
     drawText (g, "BEADWORK", { 100.0f, 14.0f, 220.0f, 46.0f }, 38.0f, colours::brand, true,
               juce::Justification::centredLeft);
-    drawText (g, "euclidean drum sequencer  /  MIDI for Live", { 318.0f, 22.0f, 420.0f, 34.0f }, 19.0f,
+    drawText (g, "euclidean drum sequencer", { 318.0f, 22.0f, 240.0f, 34.0f }, 19.0f,
               colours::ink, true, juce::Justification::centredLeft);
-    drawText (g, "KIT", { 960.0f, 20.0f, 44.0f, 34.0f }, 13.0f, colours::ink, true, juce::Justification::centredRight);
+    drawText (g, "KIT MAP", { 548.0f, 20.0f, 80.0f, 34.0f }, 13.0f, colours::ink, true, juce::Justification::centredRight);
+    drawText (g, "GROOVE", { 936.0f, 20.0f, 68.0f, 34.0f }, 13.0f, colours::ink, true, juce::Justification::centredRight);
 
     // Sections.
     drawSection (g, kLanesBox, "LANES");

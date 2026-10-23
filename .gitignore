@@ -46,3 +46,4 @@ DerivedData/
 # Local reference material (third-party manual renders). Never commit.
 .ref/
 *.pdf
+!docs/*.pdf

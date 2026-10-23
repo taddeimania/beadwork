@@ -101,6 +101,8 @@ public:
     explicit PanelButton (juce::String label = {});
 
     std::function<void (const juce::ModifierKeys&)> onClick;
+    std::function<void()> onPress;     // mouse down
+    std::function<void()> onRelease;   // mouse up, wherever the mouse is
 
     void setLabel (const juce::String& t) { if (t != label) { label = t; repaint(); } }
     void setLit (bool l) { if (l != lit) { lit = l; repaint(); } }

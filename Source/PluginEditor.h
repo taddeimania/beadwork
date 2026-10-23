@@ -115,6 +115,12 @@ private:
     beadwork::ui::PanelButton prevBtn { "<" }, nextBtn { ">" };
     beadwork::ui::PanelButton restartBtn { "RESTART" }, rerollBtn { "REROLL" }, muteAllBtn { "MUTE ALL" };
 
+    // Scatter
+    beadwork::ui::PanelButton scatterBtn { "SCATTER" };
+    beadwork::ui::Knob scatterTypeKnob, scatterDepthKnob;
+    bool scatterWasOn = false;
+    juce::uint32 scatterPressMs = 0;
+
     std::vector<std::unique_ptr<SliderAttachment>> attachments;
     std::unique_ptr<SliderAttachment> levelAttachment;
 

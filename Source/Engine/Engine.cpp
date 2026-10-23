@@ -186,6 +186,215 @@ double swingVelocityScale (double beat, double anchorBeat, const Globals& g) noe
 }
 
 // ---------------------------------------------------------------------------
+// Scatter
+// ---------------------------------------------------------------------------
+namespace
+{
+// A stable value in [0, 1) for a (type, a, b) triple: the dice scatter uses.
+// It doesn't depend on the session seed, so a type and depth always sound the
+// same, the way a hardware preset does.
+double scatterDice (int type, int64_t a, int64_t b) noexcept
+{
+    return rand01 ((uint64_t) 0x5CA77E5 + (uint64_t) type, (uint32_t) a, (uint32_t) b, kFieldRatchet);
+}
+
+// Window lengths that grow with depth: a beat, two beats, a bar.
+int windowFor (int depth) noexcept { return depth <= 3 ? 4 : (depth <= 6 ? 8 : 16); }
+
+int64_t floorDiv (int64_t a, int64_t b) noexcept { return a >= 0 ? a / b : -((-a + b - 1) / b); }
+int64_t floorMod (int64_t a, int64_t b) noexcept { return a - floorDiv (a, b) * b; }
+} // namespace
+
+ScatterStep scatterStep (int type, int depth, int64_t cell) noexcept
+{
+    type  = std::clamp (type, 0, kNumScatterTypes - 1);
+    depth = std::clamp (depth, 1, kMaxScatterDepth);
+
+    ScatterStep s;
+    switch (type)
+    {
+        case 0: // STUTTER: each group repeats its first step. Depth widens the group.
+        {
+            const int g = depth <= 3 ? 2 : (depth <= 6 ? 4 : (depth <= 9 ? 8 : 16));
+            s.src = (float) -floorMod (cell, g);
+            s.vel = floorMod (cell, g) == 0 ? 1.0f : 0.9f;
+            break;
+        }
+        case 1: // REVERSE: the window's steps in backwards order.
+        {
+            const int n = windowFor (depth);
+            const int i = (int) floorMod (cell, n);
+            s.src = (float) (n - 1 - 2 * i);
+            break;
+        }
+        case 2: // HALF: the window's first half, at half speed.
+        {
+            const int n = windowFor (depth);
+            const int i = (int) floorMod (cell, n);
+            s.src   = -0.5f * (float) i;
+            s.speed = 0.5f;
+            s.gate  = 1.6f;
+            break;
+        }
+        case 3: // DOUBLE: the window twice, at double speed.
+        {
+            const int n = windowFor (depth);
+            const int i = (int) floorMod (cell, n);
+            s.src   = (float) ((2 * i) % n - i);
+            s.speed = 2.0f;
+            s.gate  = 0.6f;
+            break;
+        }
+        case 4: // SKIP: jump ahead, dropping one step in every k.
+        {
+            const int k = std::max (2, 11 - depth);          // depth 1: drop 1 in 10 ... depth 10: 1 in 2
+            const int i = (int) floorMod (cell, 16);
+            const int jumped = i + i / (k - 1);
+            s.src = (float) (jumped % 16 - i);
+            break;
+        }
+        case 5: // SWAP: exchange neighbouring steps, more pairs with depth.
+        {
+            const int64_t pair = floorDiv (cell, 2);
+            if (scatterDice (type, floorMod (pair, 8), 0) < depth / 10.0)
+                s.src = floorMod (cell, 2) == 0 ? 1.0f : -1.0f;
+            break;
+        }
+        case 6: // ROLL: the end of each bar rolls the step before it, building up.
+        {
+            const int i    = (int) floorMod (cell, 16);
+            const int tail = std::max (1, (depth * 8 + 9) / 10);   // 1..8 cells
+            const int from = 16 - tail;
+            if (i >= from)
+            {
+                const float pos = tail > 1 ? (float) (i - from) / (float) (tail - 1) : 1.0f;
+                s.src  = (float) (from - 1 - i);
+                s.reps = pos < 0.5f ? 2 : 4;
+                s.vel  = 0.55f + 0.45f * pos;
+                s.gate = 0.5f;
+            }
+            break;
+        }
+        case 7: // TAPE STOP: the end of each bar slows to a halt.
+        {
+            const int i    = (int) floorMod (cell, 16);
+            const int tail = std::max (2, (depth * 16 + 9) / 10);  // 2..16 cells
+            const int from = 16 - tail;
+            if (i >= from)
+            {
+                // Speed falls linearly to near zero; the source position is the
+                // running sum of the speeds before this cell.
+                double pos = from;
+                for (int j = 0; j < i - from; ++j)
+                    pos += 1.0 - (double) (j + 1) / (double) (tail + 1);
+                const double sp = 1.0 - (double) (i - from + 1) / (double) (tail + 1);
+                s.src   = (float) (pos - i);
+                s.speed = (float) sp;
+                s.gate  = (float) std::min (3.0, 1.0 / std::max (0.15, sp));
+                s.vel   = (float) (0.55 + 0.45 * sp);
+            }
+            break;
+        }
+        case 8: // GATE: a rhythmic chop, like a trance gate. A fixed pattern of
+                // silences that eats more of the bar with depth (about 8 %
+                // per step of depth), never the downbeat. Notes shorten too.
+        {
+            const int i = (int) floorMod (cell, 16);
+            s.gate = std::max (0.2f, 1.0f - 0.08f * (float) depth);
+            if (i != 0 && scatterDice (type, i, 0) < depth * 0.085)
+                s.mute = true;
+            s.vel = i % 4 == 0 ? 1.0f : 0.85f;
+            break;
+        }
+        case 9: // SCRAMBLE: steps drawn from anywhere in the bar; a new draw each
+                // bar, repeating every four bars so it still reads as a pattern.
+        {
+            const int64_t bar = floorMod (floorDiv (cell, 16), 4);
+            const int i = (int) floorMod (cell, 16);
+            if (scatterDice (type, bar * 16 + i, 1) < depth / 10.0)
+            {
+                const int to = std::min (15, (int) (scatterDice (type, bar * 16 + i, 2) * 16.0));
+                s.src = (float) (to - i);
+            }
+            break;
+        }
+        default: break;
+    }
+    return s;
+}
+
+void Sequencer::scatterCell (const Globals& g, TrackRt& t, double cell) noexcept
+{
+    const int64_t index = (int64_t) std::llround ((cell - anchor) / kScatterCell);
+    const ScatterStep st = scatterStep (g.scatterType, g.scatterDepth, index);
+    if (st.mute || t.loopBeats <= 0.0)
+        return;
+
+    const double L      = t.loopBeats;
+    const double srcLen = std::min (L, std::max (0.0, (double) st.speed) * kScatterCell);
+    if (srcLen <= 0.0)
+        return;
+
+    // The source span, as a phase in the current pass (wrapping round the loop,
+    // so a short loop scatters against itself).
+    double sa = std::fmod (cell + st.src * kScatterCell - t.loopStart, L);
+    if (sa < 0.0)
+        sa += L;
+
+    const int    reps = std::clamp (st.reps, 1, 8);
+    const double slot = kScatterCell / reps;
+    const double end  = cell + kScatterCell - 1.0e-6;
+
+    // Compact the pending list so there's room at the back.
+    if (t.pendHead > 0)
+    {
+        for (int i = t.pendHead; i < t.pendCount; ++i)
+            t.pending[(size_t) (i - t.pendHead)] = t.pending[(size_t) i];
+        t.pendCount -= t.pendHead;
+        t.pendHead = 0;
+    }
+    const int first = t.pendCount;
+
+    for (int k = 0; k < t.hitCount; ++k)
+    {
+        const Hit& h = t.hits[(size_t) k];
+        double d = (h.beat - t.loopStart) - sa;
+        if (d < 0.0) d += L;
+        if (d < 0.0 || d >= srcLen)
+            continue;
+
+        const double u = d / srcLen; // 0..1 through the source span
+        double gate = (h.offBeat - h.beat) * st.gate;
+        if (reps > 1)
+            gate = std::min (gate, slot * 0.9);
+        gate = std::max (gate, 1.0e-3);
+        const int vel = std::clamp ((int) std::lround (h.velocity * st.vel), 1, 127);
+
+        for (int r = 0; r < reps && t.pendCount < kMaxPending; ++r)
+        {
+            Hit& o = t.pending[(size_t) t.pendCount++];
+            o.beat     = std::min (end, cell + (u + r) * slot);
+            o.offBeat  = o.beat + gate;
+            o.velocity = (uint8_t) vel;
+            o.step     = h.step;
+        }
+    }
+
+    // Keep this cell's hits in time order (the source can wrap round the loop).
+    for (int i = first + 1; i < t.pendCount; ++i)
+    {
+        const Hit key = t.pending[(size_t) i];
+        int j = i - 1;
+        while (j >= first && t.pending[(size_t) j].beat > key.beat)
+        {
+            t.pending[(size_t) (j + 1)] = t.pending[(size_t) j];
+            --j;
+        }
+        t.pending[(size_t) (j + 1)] = key;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Sequencer
 // ---------------------------------------------------------------------------
 void Sequencer::reset() noexcept
@@ -196,6 +405,8 @@ void Sequencer::reset() noexcept
         t.loopStart = 0.0; t.loopBeats = 4.0; t.pass = 0; t.dir = 1;
         t.silent = false; t.activeNote = -1; t.activeChan = 10; t.offAt = 0.0;
         t.uiStep = -1; t.hitCount = 0; t.hitCursor = 0;
+        t.pendHead = t.pendCount = 0;
+        t.scatterNext = t.scatterFrom = t.scatterUntil = -1.0e300;
     }
     wasPlaying = false;
     expectedPpq = 0.0;
@@ -361,6 +572,8 @@ void Sequencer::seekAll (const Globals& g, const Project& p, double at) noexcept
         t.repeatsDone = 0;
         t.silent      = false;
         t.uiStep      = -1;
+        t.pendHead    = t.pendCount = 0;
+        t.scatterNext = t.scatterFrom = t.scatterUntil = -1.0e300;
         t.pattern     = patternForPass (tr, g, i, t);
 
         const double L = tr.patterns[(size_t) t.pattern].loopBeats();

@@ -556,6 +556,160 @@ static void testStress()
     check (! m.empty(), "and it still plays");
 }
 
+
+// ---------------------------------------------------------------------------
+// Run with a hook that can change the globals before each block.
+template <typename Hook>
+std::vector<Msg> runWith (Sequencer& seq, const Project& p, Globals g, double beats, int block, Hook&& hook)
+{
+    std::vector<Msg> out;
+    const double bps = 120.0 / (60.0 * kSr);
+    const long long total = (long long) std::llround (beats / bps);
+    for (long long s = 0; s < total; s += block)
+    {
+        BlockInfo b;
+        b.playing = true; b.ppq = s * bps; b.bpm = 120.0; b.sampleRate = kSr;
+        b.numSamples = (int) std::min<long long> (block, total - s);
+        hook (g, b.ppq);
+        seq.process (b, g, p, [&] (int off, const NoteEvent& e)
+        {
+            out.push_back ({ s + off, e.beat, e.track, e.note, e.velocity, e.on });
+        });
+    }
+    return out;
+}
+
+static void testScatter()
+{
+    section ("Scatter");
+
+    // Lane 0: steps 0 and 1 lit with different velocities, nothing else.
+    Project p = emptyProject();
+    Pattern& k = p.tracks[0].patterns[0];
+    k.steps = 16; k.fills = 0;
+    k.forceOn = 0b11u;
+    k.stepVel[0] = 100; k.stepVel[1] = 50;
+
+    // REVERSE, depth 1 (a one-beat window): the beat plays back to front.
+    {
+        Globals g; g.scatter = true; g.scatterType = 1; g.scatterDepth = 1;
+        Sequencer seq;
+        auto ons = onsFor (run (seq, p, g, 1.0), 0);
+        check (ons.size() == 2, "reverse: two hits in the beat (got " + std::to_string (ons.size()) + ")");
+        if (ons.size() == 2)
+        {
+            checkNear (ons[0].beat, 0.50, 1e-9, "reverse: step 2 now plays third");
+            check (ons[0].velocity == 50, "reverse: ... with step 2's velocity");
+            checkNear (ons[1].beat, 0.75, 1e-9, "reverse: step 1 now plays last");
+            check (ons[1].velocity == 100, "reverse: ... with step 1's velocity");
+        }
+    }
+
+    // STUTTER, depth 1: every pair repeats its first step.
+    {
+        Globals g; g.scatter = true; g.scatterType = 0; g.scatterDepth = 1;
+        Sequencer seq;
+        auto ons = onsFor (run (seq, p, g, 1.0), 0);
+        check (ons.size() == 2, "stutter: two hits (got " + std::to_string (ons.size()) + ")");
+        if (ons.size() == 2)
+            check (ons[1].velocity == 90, "stutter: the repeat is step 1 again (x0.9)");
+    }
+
+    // HALF on four on the floor: half as many kicks.
+    {
+        Project q = emptyProject();
+        q.tracks[0].patterns[0].fills = 4;
+        Globals g; g.scatter = true; g.scatterType = 2; g.scatterDepth = 7;
+        Sequencer seq;
+        auto ons = onsFor (run (seq, q, g, 4.0), 0);
+        check (ons.size() == 2, "half time: 2 kicks in the bar (got " + std::to_string (ons.size()) + ")");
+    }
+
+    // Engaging is quantised to the next 1/16, and letting go returns the
+    // pattern exactly where it would have been.
+    {
+        Project q = emptyProject();
+        Pattern& h = q.tracks[4].patterns[0];
+        h.steps = 16; h.fills = 16;
+        for (int i = 0; i < 16; ++i) h.stepVel[(size_t) i] = (uint8_t) (40 + i * 5);
+
+        Sequencer plain, thrown;
+        auto base = run (plain, q, Globals {}, 8.0, 120.0, 256);
+        auto withScatter = runWith (thrown, q, Globals {}, 8.0, 256, [] (Globals& g, double ppq)
+        {
+            g.scatterType = 1; g.scatterDepth = 9;
+            g.scatter = ppq >= 0.1 && ppq < 4.0;
+        });
+
+        auto onsBase = onsFor (base, 4), onsThrown = onsFor (withScatter, 4);
+        bool firstSame = ! onsThrown.empty() && onsThrown[0].velocity == onsBase[0].velocity;
+        check (firstSame, "the step before the next 1/16 plays as written");
+
+        // After the throw (and the cell it finishes) everything matches.
+        std::vector<Msg> a, b;
+        for (auto& m : onsBase)   if (m.beat >= 4.5) a.push_back (m);
+        for (auto& m : onsThrown) if (m.beat >= 4.5) b.push_back (m);
+        bool same = a.size() == b.size() && ! a.empty();
+        for (size_t i = 0; same && i < a.size(); ++i)
+            same = a[i].sample == b[i].sample && a[i].velocity == b[i].velocity;
+        check (same, "releasing scatter drops straight back into the pattern");
+
+        // And during the throw it really is different.
+        bool differs = false;
+        for (size_t i = 0; i < onsBase.size() && i < onsThrown.size(); ++i)
+            if (onsBase[i].beat < 4.0 && onsBase[i].velocity != onsThrown[i].velocity) differs = true;
+        check (differs, "while engaged, the steps are rearranged");
+    }
+
+    // Every type at every depth: well formed and block-size independent.
+    {
+        Project busy;
+        initKit (busy);
+        busy.tracks[4].patterns[0].ratchet[3] = 3;
+        busy.tracks[0].patterns[0].nudge[2] = -20;
+        busy.tracks[2].patterns[0].steps = 7;
+
+        bool allWell = true, allSame = true, anySound = true;
+        std::string firstBad;
+        for (int type = 0; type < kNumScatterTypes; ++type)
+            for (int depth = 1; depth <= kMaxScatterDepth; ++depth)
+            {
+                Globals g; g.scatter = true; g.scatterType = type; g.scatterDepth = depth; g.swing = 60;
+                Sequencer a, b;
+                auto ma = run (a, busy, g, 8.0, 120.0, 64);
+                auto mb = run (b, busy, g, 8.0, 120.0, 1999);
+                const bool well = wellFormed (ma) && wellFormed (mb);
+                // Block order differs across lanes, so compare per lane.
+                bool same = true;
+                for (int t = 0; t < kNumTracks && same; ++t)
+                {
+                    std::vector<Msg> x, y;
+                    for (auto& m : ma) if (m.track == t) x.push_back (m);
+                    for (auto& m : mb) if (m.track == t) y.push_back (m);
+                    same = x.size() == y.size();
+                    for (size_t i = 0; same && i < x.size(); ++i)
+                        // +/- 1 sample: a hit exactly half way between two samples may
+                        // round either way depending on where the block starts.
+                        same = std::llabs (x[i].sample - y[i].sample) <= 1 && x[i].on == y[i].on
+                            && x[i].velocity == y[i].velocity;
+                }
+                if ((! well || ! same) && firstBad.empty())
+                    firstBad = std::string (kScatterTypeNames[(size_t) type]) + " depth " + std::to_string (depth)
+                             + (well ? "" : " (malformed)") + (same ? "" : " (block-size dependent)");
+                allWell = allWell && well;
+                allSame = allSame && same;
+                anySound = anySound && ! ma.empty();
+            }
+        check (allWell, "every type and depth: notes balanced, time never runs backwards" + (firstBad.empty() ? "" : "  first: " + firstBad));
+        check (allSame, "every type and depth: identical at block sizes 64 and 1999" + (firstBad.empty() ? "" : "  first: " + firstBad));
+        check (anySound, "every type and depth makes sound");
+    }
+
+    // Names line up with the types.
+    check (std::string (kScatterTypeNames[1]) == "REVERSE" && std::string (kScatterTypeNames[9]) == "SCRAMBLE",
+           "type names");
+}
+
 // ---------------------------------------------------------------------------
 int main()
 {
@@ -570,6 +724,7 @@ int main()
     testScenes();
     testTransport();
     testStress();
+    testScatter();
 
     std::printf ("\n%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;

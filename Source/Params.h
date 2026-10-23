@@ -22,6 +22,9 @@ inline constexpr const char* chance     = "chance";
 inline constexpr const char* velTrim    = "velTrim";
 inline constexpr const char* quantise   = "quantise";
 inline constexpr const char* masterMute = "masterMute";
+inline constexpr const char* scatter      = "scatter";
+inline constexpr const char* scatterType  = "scatterType";
+inline constexpr const char* scatterDepth = "scatterDepth";
 
 inline juce::String mute (int t)    { return "mute"  + juce::String (t + 1); }
 inline juce::String solo (int t)    { return "solo"  + juce::String (t + 1); }
@@ -56,6 +59,14 @@ inline int swingGridDivision (int i)
 {
     static constexpr int d[] { kEighth, kSixteenth, kThirtySecond };
     return d[juce::jlimit (0, 2, i)];
+}
+
+inline juce::StringArray scatterTypeNames()
+{
+    juce::StringArray n;
+    for (int i = 0; i < kNumScatterTypes; ++i)
+        n.add (juce::String (i + 1) + " " + kScatterTypeNames[(size_t) i]);
+    return n;
 }
 
 inline juce::StringArray quantiseNames()
@@ -96,6 +107,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ids::quantise, 1 }, "Pattern Quantise",
         ids::quantiseNames(), kNextBar));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::masterMute, 1 }, "Mute All", false));
+
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::scatter, 1 }, "Scatter", false));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ids::scatterType, 1 }, "Scatter Type",
+        ids::scatterTypeNames(), 0));
+    layout.add (std::make_unique<AudioParameterInt> (ParameterID { ids::scatterDepth, 1 }, "Scatter Depth",
+        1, kMaxScatterDepth, 5));
 
     for (int t = 0; t < kNumTracks; ++t)
     {

@@ -224,12 +224,20 @@ void PanelButton::paint (Graphics& g)
     drawText (g, label, r, fontH, on ? colours::black : colours::ink, true);
 }
 
-void PanelButton::mouseDown (const MouseEvent&) { pressed = true; repaint(); }
+void PanelButton::mouseDown (const MouseEvent&)
+{
+    pressed = true;
+    repaint();
+    if (onPress)
+        onPress();
+}
 
 void PanelButton::mouseUp (const MouseEvent& e)
 {
     pressed = false;
     repaint();
+    if (onRelease)
+        onRelease();
     if (getLocalBounds().contains (e.getPosition()) && onClick)
         onClick (e.mods);
 }

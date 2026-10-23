@@ -113,6 +113,59 @@ void Sequencer::runTrack (int index, const Track& tr, const Globals& g, const Pr
         const double passEnd = t.loopStart + t.loopBeats;
         const double segEnd  = to < passEnd ? to : passEnd;
 
+        // Sound one hit (a normal one or a scattered one).
+        auto play = [&] (const Hit& h)
+        {
+            // A note-off that is due before this hit starts.
+            if (t.activeNote >= 0 && t.offAt <= h.beat)
+                closeNote (t, index, t.offAt, bps, p0, numSamples, emit);
+
+            if (t.silent || ! gateOpen || h.velocity == 0 || sceneMutedAt (h.beat))
+                return;
+
+            // One note at a time per lane: retrigger closes the last hit.
+            if (t.activeNote >= 0)
+                closeNote (t, index, h.beat, bps, p0, numSamples, emit);
+
+            NoteEvent e;
+            e.beat     = h.beat;
+            e.track    = index;
+            e.channel  = tr.channel == 0 ? g.channel : tr.channel;
+            e.note     = tr.note;
+            e.velocity = h.velocity;
+            e.on       = true;
+            emit (offsetOf (h.beat), e);
+
+            t.activeNote = e.note;
+            t.activeChan = e.channel;
+            t.offAt      = h.offBeat;
+        };
+
+        // --- scatter: lay out every 1/16 cell that starts in this window -----
+        // Engaging waits for the next cell boundary, so a throw is always on
+        // the grid; letting go finishes the cell that's playing.
+        if (g.scatter)
+        {
+            const double gridNext = anchor + std::ceil ((cursor - anchor) / kScatterCell - 1.0e-9) * kScatterCell;
+            double c = std::max (t.scatterNext, gridNext);
+            if (c > t.scatterUntil + 1.0e-9)
+                t.scatterFrom = c;                 // a new run starts here
+            while (c < segEnd - 1.0e-12)
+            {
+                scatterCell (g, t, c);
+                c += kScatterCell;
+                t.scatterUntil = c;
+            }
+            t.scatterNext = c;
+        }
+
+        // Scattered hits come first: they all fall before scatterUntil, and
+        // every normal hit that still sounds falls after it.
+        while (t.pendHead < t.pendCount && t.pending[(size_t) t.pendHead].beat < segEnd)
+            play (t.pending[(size_t) t.pendHead++]);
+        if (t.pendHead >= t.pendCount)
+            t.pendHead = t.pendCount = 0;
+
         // --- the hits of this pass that fall in the window ------------------
         while (t.hitCursor < t.hitCount)
         {
@@ -120,29 +173,9 @@ void Sequencer::runTrack (int index, const Track& tr, const Globals& g, const Pr
             if (h.beat >= segEnd)
                 break;
 
-            // A note-off that is due before this hit starts.
-            if (t.activeNote >= 0 && t.offAt <= h.beat)
-                closeNote (t, index, t.offAt, bps, p0, numSamples, emit);
-
-            if (! t.silent && gateOpen && h.velocity > 0 && ! sceneMutedAt (h.beat))
-            {
-                // One note at a time per lane: retrigger closes the last hit.
-                if (t.activeNote >= 0)
-                    closeNote (t, index, h.beat, bps, p0, numSamples, emit);
-
-                NoteEvent e;
-                e.beat     = h.beat;
-                e.track    = index;
-                e.channel  = tr.channel == 0 ? g.channel : tr.channel;
-                e.note     = tr.note;
-                e.velocity = h.velocity;
-                e.on       = true;
-                emit (offsetOf (h.beat), e);
-
-                t.activeNote = e.note;
-                t.activeChan = e.channel;
-                t.offAt      = h.offBeat;
-            }
+            // Inside a scattered run the pattern keeps walking, silently.
+            if (! (h.beat >= t.scatterFrom && h.beat < t.scatterUntil))
+                play (h);
 
             t.uiStep = h.step;
             ++t.hitCursor;

@@ -28,6 +28,11 @@
 //     parameters so the host sees and can automate it.
 //   * Output is MIDI only. Mute is a MIDI gate: a muted track keeps running and
 //     keeps its place, it just stops speaking.
+//   * SCATTER is a performance effect in the spirit of the drum machines that
+//     made it famous: while it's on, what you hear is the loop's steps
+//     rearranged -- exchanged, reversed, repeated, slowed, gated -- on a 1/16
+//     grid. The sequencer keeps walking underneath, so turning it off drops you
+//     back exactly where the pattern would be. Nothing stored is changed.
 //
 // Timing
 // ------
@@ -143,6 +148,35 @@ enum SceneMode
 };
 
 inline constexpr std::array<const char*, 3> kSceneModeNames { "PERFORM", "PLAY", "LOOP" };
+
+// ---------------------------------------------------------------------------
+// Scatter
+// ---------------------------------------------------------------------------
+constexpr int    kNumScatterTypes = 10;
+constexpr int    kMaxScatterDepth = 10;
+constexpr double kScatterCell     = 0.25;   // scatter works on 1/16 cells
+
+inline constexpr std::array<const char*, kNumScatterTypes> kScatterTypeNames {
+    "STUTTER", "REVERSE", "HALF", "DOUBLE", "SKIP",
+    "SWAP", "ROLL", "TAPE STOP", "GATE", "SCRAMBLE"
+};
+
+// What one output cell plays while scattering. The cell replays the source
+// span [cell + src, cell + src + speed) (in cells), squeezed or stretched into
+// the cell, `reps` times over.
+struct ScatterStep
+{
+    float src   = 0.0f;  // where the source span starts, in cells, relative to this cell
+    float speed = 1.0f;  // source cells consumed per output cell (0.5 = half time, 2 = double)
+    int   reps  = 1;     // play the span this many times inside the cell (rolls)
+    bool  mute  = false; // silence the cell
+    float gate  = 1.0f;  // note length multiplier
+    float vel   = 1.0f;  // velocity multiplier
+};
+
+// The rule each type follows. `cell` counts 1/16 cells from the anchor, so
+// every type lines up with the bar. Depth 1..10 sets how far it goes.
+ScatterStep scatterStep (int type, int depth, int64_t cell) noexcept;
 
 // ---------------------------------------------------------------------------
 // Deterministic randomness
@@ -341,6 +375,10 @@ struct Globals
     uint8_t quantise  = kNextBar; // when a pending pattern change lands
     bool    masterMute = false;
 
+    bool scatter      = false;    // SCATTER engaged
+    int  scatterType  = 0;        // 0..kNumScatterTypes-1
+    int  scatterDepth = 5;        // 1..kMaxScatterDepth
+
     // Per-track performance state. These mirror host parameters so the host can
     // automate them; the engine never writes them.
     std::array<uint8_t, kNumTracks> selected {};  // pattern index per track
@@ -433,6 +471,7 @@ private:
 
     static constexpr int kMaxRatchet = 8;
     static constexpr int kMaxHits    = kMaxSteps * kMaxRatchet;
+    static constexpr int kMaxPending = 192;
 
     struct TrackRt
     {
@@ -452,6 +491,16 @@ private:
         std::array<Hit, kMaxHits> hits {};
         int hitCount  = 0;
         int hitCursor = 0;
+
+        // Scatter: hits laid out for cells that have started but not finished,
+        // waiting for their beat; and how far scattered output reaches. Normal
+        // hits before `scatterUntil` stay silent.
+        std::array<Hit, kMaxPending> pending {};
+        int    pendHead     = 0;
+        int    pendCount    = 0;
+        double scatterNext  = -1.0e300;  // first cell not yet laid out
+        double scatterFrom  = -1.0e300;  // start of the current run of scattered cells
+        double scatterUntil = -1.0e300;  // ... and its end
     };
 
     static constexpr double kNone = -std::numeric_limits<double>::infinity();
@@ -467,6 +516,10 @@ private:
 
     // Restart every track's chain at `at`, aligned to the anchor grid.
     void seekAll (const Globals& g, const Project& p, double at) noexcept;
+
+    // Lay out the scattered hits of the 1/16 cell starting at `cell` from the
+    // current pass of a track, into its pending list.
+    void scatterCell (const Globals& g, TrackRt& t, double cell) noexcept;
 
     template <typename Emit>
     void runTrack (int index, const Track& tr, const Globals& g, const Project& p,

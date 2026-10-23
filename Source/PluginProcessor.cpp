@@ -60,6 +60,9 @@ void BeadworkProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::Mid
     g.velTrim    = geti (ids::velTrim);
     g.quantise   = (uint8_t) juce::jlimit (0, 7, geti (ids::quantise));
     g.masterMute = getParam (ids::masterMute) > 0.5f;
+    g.scatter      = getParam (ids::scatter) > 0.5f;
+    g.scatterType  = juce::jlimit (0, kNumScatterTypes - 1, geti (ids::scatterType));
+    g.scatterDepth = juce::jlimit (1, kMaxScatterDepth, geti (ids::scatterDepth));
     g.seed       = seed.load();
     for (int t = 0; t < kNumTracks; ++t)
     {

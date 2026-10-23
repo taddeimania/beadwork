@@ -6,7 +6,8 @@ evenly as possible round a necklace of steps (Bjorklund's algorithm), and you
 take it from there: turn the necklace, add and remove beads by hand, accent
 them, ratchet them, give them a chance of playing, nudge them early or late.
 Every lane has sixteen patterns and its own chain, and sixteen scenes snapshot
-the whole kit and chain together into a song.
+the whole kit and chain together into a song. When you want to throw it about,
+**SCATTER** rearranges what you hear in real time without touching the pattern.
 
 The Euclidean engine and the pattern / sequence workflow are inspired by the
 Euclid step mode of a well-known hardware sequencer, trimmed to what a drum
@@ -16,6 +17,10 @@ Sibling to [Dicey](https://github.com/taddeimania/dicer): same panel language,
 same "follows Live's transport" approach to the clock.
 
 ![Beadwork panel](docs/beadwork_panel.png)
+
+**Guides:** [Getting started](docs/Beadwork-Getting-Started.pdf) wires Beadwork to a drum kit in Live.
+[Patterns, chains and scenes](docs/Beadwork-Patterns-and-Scenes.pdf) explains how the arranging layers
+fit together and builds a song with them.
 
 ---
 
@@ -55,7 +60,10 @@ cover the Euclidean figures against Toussaint's published rhythms (tresillo,
 cinquillo, bossa nova clave ...), the per-step layers, sample-accurate timing
 at any block size, polymeter and polyrhythm, accents, ratchets, chance, nudge,
 swing, mute and solo, pattern chains, quantised pattern changes, scene chains,
-transport start / stop / jumps, and a worst-case stress run.
+transport start / stop / jumps, a worst-case stress run, and Scatter: exact
+results for its types, quantised engage, a clean return to the pattern on
+release, and identical output at any buffer size for all 100 type / depth
+combinations.
 
 With `-DBEADWORK_BUILD_TOOLS=ON`:
 
@@ -204,9 +212,42 @@ over it.
 ### Transport
 
 The LCD shows the focused lane, its playing pattern and step, and the scene
-chain's position. **RESTART** brings every lane and chain back to the top on
-the next beat. **REROLL** throws new dice. **MUTE ALL** silences everything
-while it keeps running underneath.
+chain's position (or the Scatter type and depth while it's on). **RESTART**
+brings every lane and chain back to the top on the next beat. **REROLL** throws
+new dice. **MUTE ALL** silences everything while it keeps running underneath.
+
+### Scatter
+
+A performance effect after the one on Roland's TR-8 and TR-8S. While it's on,
+what you hear is the loop's steps rearranged on a 1/16 grid: swapped, reversed,
+repeated, slowed, chopped. The sequencer keeps walking underneath, so when you
+let go you drop straight back to where the pattern would have been. Nothing
+stored changes.
+
+- **Tap SCATTER** to latch it on; tap again to turn it off.
+- **Hold SCATTER** for a throw: it stops when you let go.
+- It always starts on the next 1/16, so a throw is never off the grid, and it
+  scatters every lane together.
+- **Scatter**, **Scatter Type** and **Scatter Depth** are host parameters, so
+  you can draw throws into an arrangement.
+
+| Type | What it does | What DEPTH changes |
+| --- | --- | --- |
+| 1 STUTTER | each group of steps repeats its first step | group size: 2, 4, 8, 16 steps |
+| 2 REVERSE | the window plays back to front | window: a beat, half a bar, a bar |
+| 3 HALF | the first half of the window at half speed | window |
+| 4 DOUBLE | the window twice over at double speed | window |
+| 5 SKIP | jumps ahead, dropping steps | from 1 step in 10 to every other step |
+| 6 SWAP | neighbouring steps trade places | how many pairs swap |
+| 7 ROLL | the end of each bar rolls the step before it, building up | how long the roll is (1 to 8 steps) |
+| 8 TAPE STOP | the end of each bar slows to a halt | how early the slowdown starts |
+| 9 GATE | a rhythmic chop that silences parts of the bar (never the downbeat) | how much of the bar is cut |
+| 10 SCRAMBLE | steps drawn from anywhere in the bar, a new draw each bar for four bars | how many steps move |
+
+Each type and depth always does the same thing, the way a preset on hardware
+does, so a throw you like is a throw you can repeat. The ten types are
+Beadwork's own: the TR-8S manual doesn't document what its types do, only that
+Scatter exchanges steps and changes playback direction and gate length.
 
 ### Kits
 

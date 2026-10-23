@@ -1,6 +1,7 @@
 // Snapshot.cpp — dev tool, built with -DBEADWORK_BUILD_TOOLS=ON.
-//   BeadworkSnapshot panel.png [kit] [scale] [beats] [lane] [layer]   render the panel mid-playback
-//   BeadworkSnapshot --midi [kitIndex] [bars]               print the MIDI a kit sends
+//   BeadworkSnapshot panel.png [kit] [scale] [beats] [lane] [layer] [demo|scatter|scenes]
+//                                                       render the panel mid-playback
+//   BeadworkSnapshot --midi [kit] [bars] [scatterType depth] print the MIDI a kit sends
 //   BeadworkSnapshot --state-test                           session / kit round trip
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "PluginProcessor.h"
@@ -98,7 +99,17 @@ int main (int argc, char** argv)
         auto p = std::make_unique<BeadworkProcessor>();
         p->presets.loadIndex (kit);
         p->store.publishIfDirty();
-        std::printf ("kit: %s\n", p->presets.currentName().toRawUTF8());
+        std::printf ("kit: %s", p->presets.currentName().toRawUTF8());
+        if (argc > 5)
+        {
+            const int type = juce::String (argv[4]).getIntValue();     // 1..10, as on the panel
+            const int depth = juce::String (argv[5]).getIntValue();
+            p->setParam (beadwork::ids::scatter, 1.0f);
+            p->setParam (beadwork::ids::scatterType, (float) (type - 1));
+            p->setParam (beadwork::ids::scatterDepth, (float) depth);
+            std::printf ("   scatter %s depth %d", beadwork::ids::scatterTypeNames()[type - 1].toRawUTF8(), depth);
+        }
+        std::printf ("\n");
 
         FakeHost host;
         std::array<juce::String, beadwork::kNumTracks> grid;
@@ -111,6 +122,8 @@ int main (int argc, char** argv)
                 const auto msg = meta.getMessage();
                 if (! msg.isNoteOn()) continue;
                 const double beat = ppq + meta.samplePosition * (120.0 / 60.0 / 48000.0);
+                if (beat >= bars * 4.0 - 1e-9)
+                    continue; // the next bar's downbeat, from the last block's overhang
                 const int step = juce::jlimit (0, stepsTotal - 1, (int) std::floor (beat * 4.0 + 1e-6));
                 for (int t = 0; t < beadwork::kNumTracks; ++t)
                     if (p->store.view().tracks[(size_t) t].note == msg.getNoteNumber())
@@ -133,9 +146,42 @@ int main (int argc, char** argv)
     auto p = std::make_unique<BeadworkProcessor>();
     p->presets.loadIndex (kit);
     p->store.publishIfDirty();
+
+    // Optional: three stored scenes and a looping scene chain, for the docs.
+    if (argc > 7 && juce::String (argv[7]) == "scenes")
+    {
+        auto& pr = p->store.edit();
+        auto name = [] (beadwork::Scene& sc, const char* n) { sc.name.fill (0); std::strncpy (sc.name.data(), n, beadwork::kNameChars - 1); };
+        for (int t = 0; t < beadwork::kNumTracks; ++t)
+        {
+            pr.scenes[0].pattern[(size_t) t] = 0;
+            pr.scenes[1].pattern[(size_t) t] = 1;
+            pr.scenes[2].pattern[(size_t) t] = 0;
+        }
+        pr.scenes[0].used = pr.scenes[1].used = pr.scenes[2].used = 1;
+        pr.scenes[2].muted = 1u;                       // the breakdown drops the kick
+        name (pr.scenes[0], "VERSE"); name (pr.scenes[1], "CHRUS"); name (pr.scenes[2], "BREAK");
+        pr.sceneMode = beadwork::kPlayLoop;
+        pr.sceneChainLen = 4;
+        const int sc[] { 0, 1, 2, 1 }, bars[] { 8, 8, 4, 8 };
+        for (int i = 0; i < 4; ++i)
+        {
+            pr.sceneChainScene[(size_t) i] = (uint8_t) sc[i];
+            pr.sceneChainBars[(size_t) i]  = (uint8_t) bars[i];
+        }
+        p->store.markDirty();
+        p->store.publishNow();
+    }
     FakeHost host;
     play (*p, host, beats, [] (const juce::MidiBuffer&, double) {});
 
+    if (argc > 7 && juce::String (argv[7]) == "scatter")
+    {
+        p->setParam (beadwork::ids::scatter, 1.0f);
+        p->setParam (beadwork::ids::scatterType, 6.0f);   // 7 ROLL
+        p->setParam (beadwork::ids::scatterDepth, 7.0f);
+        play (*p, host, 0.25, [] (const juce::MidiBuffer&, double) {});
+    }
     BeadworkPanel panel (*p);
     // Optional: focus a lane and pick an edit layer, for checking the overlays.
     if (argc > 5) panel.focusLane (juce::String (argv[5]).getIntValue());

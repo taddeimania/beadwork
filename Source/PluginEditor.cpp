@@ -20,7 +20,8 @@ const juce::Rectangle<float> kFeelBox      { 912.0f, 544.0f, 576.0f, 192.0f };
 const juce::Rectangle<float> kPatternsBox  { 12.0f,  748.0f, 440.0f, 180.0f };
 const juce::Rectangle<float> kScenesBox    { 462.0f, 748.0f, 442.0f, 180.0f };
 const juce::Rectangle<float> kTransportBox { 912.0f, 748.0f, 576.0f, 180.0f };
-const juce::Rectangle<float> kLcd          { 932.0f, 770.0f, 340.0f, 66.0f };
+const juce::Rectangle<float> kLcd          { 932.0f, 770.0f, 240.0f, 66.0f };
+constexpr float kScatterX = 1286.0f;  // the SCATTER cluster sits right of this line
 
 String laneNameOf (const Track& t)
 {
@@ -400,17 +401,48 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
     addButton (prevBtn, { 1008, 20, 34, 34 }, "Previous kit", [this] (const juce::ModifierKeys&) { proc.presets.step (-1); });
     addButton (nextBtn, { 1350, 20, 34, 34 }, "Next kit",     [this] (const juce::ModifierKeys&) { proc.presets.step (1); });
 
-    addButton (restartBtn, { 932, 852, 120, 40 }, "Restart every lane and chain from the top on the next beat.",
+    addButton (restartBtn, { 932, 852, 108, 40 }, "Restart every lane and chain from the top on the next beat.",
                [this] (const juce::ModifierKeys&) { proc.requestRestart(); });
-    addButton (rerollBtn, { 1062, 852, 120, 40 },
+    addButton (rerollBtn, { 1048, 852, 108, 40 },
                "New dice for chance, humanise and random direction. Until you press this, the 'random' parts "
                "repeat exactly every time round.",
                [this] (const juce::ModifierKeys&) { proc.reroll(); statusText = "Rerolled"; statusTicks = 45; });
-    addButton (muteAllBtn, { 1192, 852, 120, 40 }, "Silence every lane; they keep running underneath.",
+    addButton (muteAllBtn, { 1164, 852, 108, 40 }, "Silence every lane; they keep running underneath.",
                [this] (const juce::ModifierKeys&)
                {
                    proc.setParam (ids::masterMute, proc.getParam (ids::masterMute) > 0.5f ? 0.0f : 1.0f);
                });
+
+    // --- scatter ---------------------------------------------------------------
+    // Tap to latch on or off; hold for a momentary throw that ends when you let go.
+    addButton (scatterBtn, { 1298, 766, 176, 38 },
+               "SCATTER rearranges what you hear: steps swapped, reversed, repeated, slowed or chopped, on a 1/16 "
+               "grid. The pattern keeps running underneath and nothing stored changes. Tap to latch it, hold it "
+               "for a throw that stops when you let go.",
+               [] (const juce::ModifierKeys&) {});
+    scatterBtn.setFontHeight (15.0f);
+    scatterBtn.onPress = [this]
+    {
+        scatterWasOn   = proc.getParam (ids::scatter) > 0.5f;
+        scatterPressMs = juce::Time::getMillisecondCounter();
+        if (! scatterWasOn)
+            proc.setParam (ids::scatter, 1.0f);
+    };
+    scatterBtn.onRelease = [this]
+    {
+        const bool held = juce::Time::getMillisecondCounter() - scatterPressMs > 350;
+        if (held || scatterWasOn)
+            proc.setParam (ids::scatter, 0.0f);   // a throw ends, or a latched scatter is tapped off
+    };
+
+    addParamKnob (scatterTypeKnob, ids::scatterType, "TYPE", { 1298, 812, 84, 98 },
+                  "1 STUTTER  2 REVERSE  3 HALF  4 DOUBLE  5 SKIP  6 SWAP  7 ROLL  8 TAPE STOP  9 GATE  10 SCRAMBLE");
+    scatterTypeKnob.format = [] (double v) { return ids::scatterTypeNames()[juce::roundToInt (v)]; };
+    addParamKnob (scatterDepthKnob, ids::scatterDepth, "DEPTH", { 1390, 812, 84, 98 },
+                  "How far the scatter goes, 1 to 10: a bigger window, more steps moved, longer rolls.");
+
+    // Show the right lit states from the first paint, not one timer tick later.
+    timerCallback();
 
     startTimerHz (30);
 }
@@ -946,6 +978,7 @@ void BeadworkPanel::timerCallback()
     playBtn.setLit (project().sceneMode == kPlayOnce);
     loopBtn.setLit (project().sceneMode == kPlayLoop);
     muteAllBtn.setLit (proc.getParam (ids::masterMute) > 0.5f);
+    scatterBtn.setLit (proc.getParam (ids::scatter) > 0.5f);
     pasteBtn.setLit (false);
 
     if (statusTicks > 0 && --statusTicks == 0)
@@ -1010,18 +1043,25 @@ void BeadworkPanel::paint (juce::Graphics& g)
         small = proc.sceneChainRunning() ? "SCENE " + String (proc.scene() + 1) + "   SLOT " + String (proc.sceneSlot() + 1)
                                          : String ("PLAYING");
     }
+    if (proc.getParam (ids::scatter) > 0.5f && statusText.isEmpty())
+        small = "SCATTER  " + ids::scatterTypeNames()[juce::roundToInt (proc.getParam (ids::scatterType))]
+              + "  " + String::fromUTF8 ("\xc2\xb7") + "  " + String (juce::roundToInt (proc.getParam (ids::scatterDepth)));
     drawText (g, big, kLcd.withHeight (40.0f).translated (0.0f, 4.0f), 24.0f, colours::lcd, true);
     drawText (g, small, kLcd.withTrimmedTop (40.0f), 12.0f, colours::lcd.withAlpha (0.8f), true);
 
-    // Run LED.
-    drawLed (g, { 1300.0f, 790.0f }, 9.0f, colours::ledGreen, running, running ? flashes[(size_t) focus] : 0.0f);
-    drawText (g, "RUN", { 1280.0f, 802.0f, 40.0f, 20.0f }, 12.0f, colours::ink, true);
-    drawLed (g, { 1360.0f, 790.0f }, 9.0f, colours::ledRed, proc.getParam (ids::masterMute) > 0.5f, 0.0f);
-    drawText (g, "MUTED", { 1335.0f, 802.0f, 50.0f, 20.0f }, 12.0f, colours::ink, true);
+    // Run and mute LEDs.
+    drawLed (g, { 1206.0f, 790.0f }, 9.0f, colours::ledGreen, running, running ? flashes[(size_t) focus] : 0.0f);
+    drawText (g, "RUN", { 1186.0f, 802.0f, 40.0f, 20.0f }, 12.0f, colours::ink, true);
+    drawLed (g, { 1252.0f, 790.0f }, 9.0f, colours::ledRed, proc.getParam (ids::masterMute) > 0.5f, 0.0f);
+    drawText (g, "MUTED", { 1227.0f, 802.0f, 50.0f, 20.0f }, 12.0f, colours::ink, true);
+
+    // The SCATTER cluster gets its own corner, divided off like a panel module.
+    g.setColour (colours::ink.withAlpha (0.85f));
+    g.drawLine (kScatterX, 762.0f, kScatterX, 916.0f, 1.2f);
 
     // One line of routing, the thing everyone asks first.
-    drawText (g, "MIDI OUT  >  a drum rack on another track, MIDI From: Beadwork",
-              { 1330.0f - 400.0f, 898.0f, 540.0f, 20.0f }, 12.0f, colours::inkDim, true, juce::Justification::centredLeft);
+    drawText (g, "MIDI OUT  >  drum rack track, MIDI From: Beadwork",
+              { 932.0f, 898.0f, 344.0f, 20.0f }, 12.0f, colours::inkDim, true, juce::Justification::centredLeft);
 }
 
 // ===========================================================================

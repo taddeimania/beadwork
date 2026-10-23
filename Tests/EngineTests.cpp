@@ -1,0 +1,576 @@
+// EngineTests.cpp — engine checks that need no JUCE and no audio device.
+// Build: part of the BeadworkEngineTests target, run with ctest.
+
+#include "Engine/Engine.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <string>
+#include <vector>
+
+using namespace beadwork;
+
+namespace
+{
+int failures = 0;
+int checks   = 0;
+
+void check (bool ok, const std::string& what)
+{
+    ++checks;
+    if (! ok)
+    {
+        ++failures;
+        std::printf ("  FAIL  %s\n", what.c_str());
+    }
+}
+
+void checkNear (double a, double b, double tol, const std::string& what)
+{
+    ++checks;
+    if (! (std::abs (a - b) <= tol))
+    {
+        ++failures;
+        std::printf ("  FAIL  %s  (got %.6g, expected %.6g +/- %.3g)\n", what.c_str(), a, b, tol);
+    }
+}
+
+void section (const char* name) { std::printf ("%s\n", name); }
+
+std::string bits (uint32_t m, int n)
+{
+    std::string s;
+    for (int i = 0; i < n; ++i)
+        s += ((m >> i) & 1u) ? 'x' : '.';
+    return s;
+}
+
+struct Msg
+{
+    long long sample;
+    double    beat;
+    int       track;
+    int       note;
+    int       velocity;
+    bool      on;
+};
+
+constexpr double kSr = 48000.0;
+
+// Run the sequencer over `beats` in blocks and collect every event.
+std::vector<Msg> run (Sequencer& seq, const Project& p, const Globals& g, double beats,
+                      double bpm = 120.0, int block = 512, double startPpq = 0.0)
+{
+    std::vector<Msg> out;
+    const double bps = bpm / (60.0 * kSr);
+    const long long total = (long long) std::llround (beats / bps);
+    for (long long s = 0; s < total; s += block)
+    {
+        BlockInfo b;
+        b.playing    = true;
+        b.ppq        = startPpq + s * bps;
+        b.bpm        = bpm;
+        b.sampleRate = kSr;
+        b.numSamples = (int) std::min<long long> (block, total - s);
+        seq.process (b, g, p, [&] (int off, const NoteEvent& e)
+        {
+            out.push_back ({ s + off, e.beat, e.track, e.note, e.velocity, e.on });
+        });
+    }
+    return out;
+}
+
+std::vector<Msg> onsFor (const std::vector<Msg>& m, int track)
+{
+    std::vector<Msg> r;
+    for (auto& x : m)
+        if (x.on && x.track == track)
+            r.push_back (x);
+    return r;
+}
+
+// A project with every lane silent, ready for one lane to be set up.
+Project emptyProject()
+{
+    Project p;
+    initKit (p);
+    for (auto& t : p.tracks)
+        for (auto& pat : t.patterns)
+            pat.fills = 0;
+    return p;
+}
+
+// Every note-on is matched by a note-off on the same lane before the lane's
+// next note-on, and time never runs backwards within a lane. Lanes are emitted
+// one after another inside a block (the plugin's MidiBuffer sorts them), so the
+// check runs on a stable sort by sample, which keeps each lane's own order.
+bool wellFormed (std::vector<Msg> m)
+{
+    std::stable_sort (m.begin(), m.end(), [] (const Msg& a, const Msg& b) { return a.sample < b.sample; });
+
+    std::array<int, kNumTracks> active {};
+    std::array<long long, kNumTracks> last {};
+    active.fill (-1);
+    last.fill (-1);
+    for (auto& x : m)
+    {
+        if (x.sample < last[(size_t) x.track]) return false;
+        last[(size_t) x.track] = x.sample;
+        int& a = active[(size_t) x.track];
+        if (x.on)
+        {
+            if (a >= 0) return false;
+            a = x.note;
+        }
+        else
+        {
+            if (a != x.note) return false;
+            a = -1;
+        }
+    }
+    return true;
+}
+} // namespace
+
+// ---------------------------------------------------------------------------
+static void testEuclid()
+{
+    section ("Euclid");
+
+    // Canonical figures from Toussaint, "The Euclidean Algorithm Generates
+    // Traditional Musical Rhythms".
+    check (bits (euclid (8, 3, 0), 8)   == "x..x..x.",         "E(3,8) tresillo");
+    check (bits (euclid (8, 5, 0), 8)   == "x.xx.xx.",         "E(5,8) cinquillo");
+    check (bits (euclid (4, 1, 0), 4)   == "x...",             "E(1,4)");
+    check (bits (euclid (12, 7, 0), 12) == "x.xx.x.xx.x.",     "E(7,12) west african bell");
+    check (bits (euclid (16, 4, 0), 16) == "x...x...x...x...", "E(4,16) four on the floor");
+    check (bits (euclid (13, 5, 0), 13) == "x..x.x..x.x..",    "E(5,13)");
+
+    check (euclid (16, 0, 0) == 0u,          "no fills is silent");
+    check (euclid (16, 16, 0) == 0xFFFFu,    "all fills is every step");
+    check (euclid (32, 32, 0) == 0xFFFFFFFFu, "32 of 32");
+    check (euclid (16, 99, 0) == 0xFFFFu,    "fills clamp to steps");
+
+    // Popcount always equals fills.
+    bool counts = true;
+    for (int n = 1; n <= kMaxSteps; ++n)
+        for (int k = 0; k <= n; ++k)
+        {
+            uint32_t m = euclid (n, k, 0);
+            int c = 0;
+            for (int i = 0; i < 32; ++i) c += (m >> i) & 1u;
+            counts = counts && c == k;
+            if (k > 0) counts = counts && (m & 1u);
+            if (n < 32) counts = counts && (m >> n) == 0u;
+        }
+    check (counts, "every (steps, fills) has the right number of beads, starting on step 1");
+
+    // Rotation.
+    check (bits (euclid (8, 3, 1), 8)  == ".x..x..x", "rotate +1 moves beads later");
+    check (bits (euclid (8, 3, -1), 8) == "..x..x.x", "rotate -1 moves beads earlier");
+    check (euclid (8, 3, 8) == euclid (8, 3, 0),      "rotate by the length is a no-op");
+    check (euclid (16, 2, 4) == ((1u << 4) | (1u << 12)), "backbeat: E(2,16) rotated 4");
+    check (bits (euclid (16, 5, 10), 16) == "x..x..x...x..x..", "bossa nova clave: E(5,16) rotated 10");
+}
+
+// ---------------------------------------------------------------------------
+static void testPatternMask()
+{
+    section ("Pattern layers");
+
+    Pattern p;
+    p.steps = 8; p.fills = 3; p.rotate = 0;
+    check (p.mask() == euclid (8, 3, 0), "plain figure");
+
+    p.forceOn = 1u << 1;
+    check (((p.mask() >> 1) & 1u) == 1u, "force-on adds a bead");
+
+    p.forceOff = 1u << 0;
+    check ((p.mask() & 1u) == 0u, "force-off removes a bead");
+
+    p.forceOn |= 1u << 20;
+    check ((p.mask() >> 8) == 0u, "layers beyond the step count are ignored");
+
+    checkNear (p.loopBeats(), 2.0, 1e-12, "8 x 1/16 = 2 beats");
+    p.fit = kPolyrhythm; p.fitBars = 1;
+    checkNear (p.loopBeats(), 4.0, 1e-12, "polyrhythm squeezes 8 steps into a bar");
+    p.steps = 5;
+    checkNear (p.stepBeats(), 0.8, 1e-12, "5 steps in a bar = 0.8 beat each");
+}
+
+// ---------------------------------------------------------------------------
+static void testTiming()
+{
+    section ("Timing");
+
+    Project p = emptyProject();
+    Globals g;
+    Pattern& k = p.tracks[0].patterns[0];
+    k.steps = 16; k.fills = 4;
+
+    Sequencer seq;
+    auto m = run (seq, p, g, 16.0);
+    auto ons = onsFor (m, 0);
+
+    check (ons.size() == 16, "four on the floor over four bars: 16 kicks (got " + std::to_string (ons.size()) + ")");
+    bool onBeat = true;
+    for (size_t i = 0; i < ons.size(); ++i)
+    {
+        const double expected = i * 1.0 * (60.0 / 120.0) * kSr;
+        onBeat = onBeat && std::abs ((double) ons[i].sample - expected) <= 1.0;
+    }
+    check (onBeat, "every kick lands on its beat, sample-accurately");
+    check (ons.empty() || ons[0].note == 36, "kick lane plays note 36");
+    check (wellFormed (m), "note-ons and offs are balanced");
+
+    // Block size must not change anything.
+    Sequencer a, b;
+    auto ma = run (a, p, g, 8.0, 120.0, 64);
+    auto mb = run (b, p, g, 8.0, 120.0, 1999);
+    bool same = ma.size() == mb.size();
+    for (size_t i = 0; same && i < ma.size(); ++i)
+        same = ma[i].sample == mb[i].sample && ma[i].on == mb[i].on;
+    check (same, "identical output at block sizes 64 and 1999");
+
+    // Clock rate halves everything.
+    Sequencer h;
+    Globals g2 = g; g2.rate = 0.5;
+    auto mh = onsFor (run (h, p, g2, 8.0), 0);
+    check (mh.size() == 4, "clock /2: half the kicks (got " + std::to_string (mh.size()) + ")");
+}
+
+// ---------------------------------------------------------------------------
+static void testPolymeter()
+{
+    section ("Polymeter and polyrhythm");
+
+    Project p = emptyProject();
+    Globals g;
+
+    // Lane 0: 16 x 1/16 with one bead (every bar). Lane 1: 12 x 1/16 (dotted
+    // half), one bead. They line up again after 3 bars.
+    p.tracks[0].patterns[0].steps = 16; p.tracks[0].patterns[0].fills = 1;
+    p.tracks[1].patterns[0].steps = 12; p.tracks[1].patterns[0].fills = 1;
+
+    Sequencer seq;
+    auto m = run (seq, p, g, 12.0);
+    check (onsFor (m, 0).size() == 3, "16-step lane: 3 hits in 3 bars");
+    check (onsFor (m, 1).size() == 4, "12-step lane: 4 hits in 3 bars");
+
+    // Polyrhythm: 5 steps squeezed into a bar, every step on.
+    Project q = emptyProject();
+    Pattern& r = q.tracks[2].patterns[0];
+    r.steps = 5; r.fills = 5; r.fit = kPolyrhythm; r.fitBars = 1;
+    Sequencer s2;
+    auto ons = onsFor (run (s2, q, g, 4.0), 2);
+    check (ons.size() == 5, "quintuplet bar: 5 hits");
+    if (ons.size() == 5)
+        checkNear (ons[1].beat - ons[0].beat, 0.8, 1e-9, "quintuplets 0.8 beat apart");
+}
+
+// ---------------------------------------------------------------------------
+static void testLayers()
+{
+    section ("Accent, ratchet, chance, nudge");
+
+    Project p = emptyProject();
+    Globals g;
+    Pattern& pat = p.tracks[0].patterns[0];
+    pat.steps = 4; pat.fills = 4; pat.division = kQuarter;
+    pat.velocity = 80; pat.accent = 30;
+    pat.accents = 1u << 2;
+    pat.ratchet[3] = 3;
+
+    Sequencer seq;
+    auto m   = run (seq, p, g, 4.0);
+    auto ons = onsFor (m, 0);
+    check (ons.size() == 6, "4 steps with a 3x ratchet on the last: 6 hits (got " + std::to_string (ons.size()) + ")");
+    if (ons.size() == 6)
+    {
+        check (ons[0].velocity == 80,  "plain step at base velocity");
+        check (ons[2].velocity == 110, "accented step adds the accent");
+        checkNear (ons[4].beat - ons[3].beat, 1.0 / 3.0, 1e-9, "ratchet hits a third of a step apart");
+    }
+    check (wellFormed (m), "ratchets retrigger cleanly");
+
+    // Chance 0 on a step silences it; pattern chance 0 silences the lane.
+    Project c = emptyProject();
+    Pattern& cp = c.tracks[0].patterns[0];
+    cp.steps = 4; cp.fills = 4; cp.division = kQuarter;
+    cp.stepChance[1] = 1; // 1 %
+    Sequencer cs;
+    auto cons = onsFor (run (cs, c, g, 400.0), 0);
+    // 100 passes: steps 0,2,3 always fire (300), step 1 about once.
+    check (cons.size() >= 300 && cons.size() <= 306, "1 % step fires rarely (got " + std::to_string (cons.size()) + ")");
+
+    cp.stepChance[1] = 0;
+    cp.chance = 50;
+    Sequencer cs2;
+    auto half = onsFor (run (cs2, c, g, 400.0), 0);
+    check (half.size() > 160 && half.size() < 240, "50 % pattern chance is about half (got " + std::to_string (half.size()) + ")");
+
+    // Same seed, same dice.
+    Sequencer cs3;
+    auto again = onsFor (run (cs3, c, g, 400.0), 0);
+    bool same = again.size() == half.size();
+    for (size_t i = 0; same && i < half.size(); ++i) same = again[i].sample == half[i].sample;
+    check (same, "chance is deterministic for a given seed");
+
+    // Nudge.
+    Project n = emptyProject();
+    Pattern& np = n.tracks[0].patterns[0];
+    np.steps = 4; np.fills = 4; np.division = kQuarter;
+    np.nudge[1] = 25;
+    Sequencer ns;
+    auto nons = onsFor (run (ns, n, g, 4.0), 0);
+    if (nons.size() == 4)
+        checkNear (nons[1].beat, 1.25, 1e-9, "nudge +25 % pushes a quarter of a step late");
+    else
+        check (false, "nudge: expected 4 hits");
+}
+
+// ---------------------------------------------------------------------------
+static void testSwing()
+{
+    section ("Swing");
+
+    Project p = emptyProject();
+    Globals g;
+    g.swing = 75; g.swingGrid = kSixteenth;
+    Pattern& h = p.tracks[4].patterns[0];
+    h.steps = 16; h.fills = 16;
+
+    Sequencer seq;
+    auto ons = onsFor (run (seq, p, g, 4.0), 4);
+    check (ons.size() == 16, "16 hats");
+    if (ons.size() == 16)
+    {
+        checkNear (ons[0].beat, 0.0,   1e-9, "first of the pair stays");
+        checkNear (ons[1].beat, 0.375, 1e-9, "75 % swing: second 1/16 lands at 3/4 of the pair");
+        checkNear (ons[2].beat, 0.5,   1e-9, "next pair starts on the grid");
+    }
+
+    g.swing = 50; g.swingVel = 0;
+    Sequencer s2;
+    auto v = onsFor (run (s2, p, g, 1.0), 4);
+    if (v.size() >= 2)
+        check (v[1].velocity < v[0].velocity, "swing velocity < 50 accents the first of each pair");
+}
+
+// ---------------------------------------------------------------------------
+static void testMuteSolo()
+{
+    section ("Mute and solo");
+
+    Project p = emptyProject();
+    p.tracks[0].patterns[0].fills = 4;
+    p.tracks[2].patterns[0].fills = 2;
+
+    Globals g;
+    g.muted[0] = true;
+    Sequencer a;
+    auto m = run (a, p, g, 4.0);
+    check (onsFor (m, 0).empty(),  "muted lane is silent");
+    check (onsFor (m, 2).size() == 2, "other lanes play on");
+
+    Globals s;
+    s.soloed[2] = true;
+    Sequencer b;
+    auto ms = run (b, p, s, 4.0);
+    check (onsFor (ms, 0).empty() && onsFor (ms, 2).size() == 2, "solo silences everything else");
+
+    // Mute is a gate: unmuting mid-bar picks up in place.
+    Globals g3;
+    Sequencer c;
+    run (c, p, g3, 2.0);
+    check (c.playingStep (0) >= 0, "a lane reports its step while playing");
+}
+
+// ---------------------------------------------------------------------------
+static void testPatternsAndChains()
+{
+    section ("Patterns and chains");
+
+    Project p = emptyProject();
+    Track& t = p.tracks[0];
+    t.patterns[0].fills = 1;               // one hit per bar
+    t.patterns[1].fills = 4;               // four per bar
+    t.patterns[2].fills = 2;
+
+    // Chain: P1 x2, P2 x1, P3 x1 -> 1 + 1 + 4 + 2 = 8 hits in 4 bars.
+    t.chainOn = 1;
+    t.chainLen = 3;
+    t.chainPattern[0] = 0; t.chainRepeats[0] = 2;
+    t.chainPattern[1] = 1; t.chainRepeats[1] = 1;
+    t.chainPattern[2] = 2; t.chainRepeats[2] = 1;
+
+    Globals g;
+    Sequencer seq;
+    auto ons = onsFor (run (seq, p, g, 16.0), 0);
+    check (ons.size() == 8, "chain P1x2 P2 P3 over 4 bars: 8 hits (got " + std::to_string (ons.size()) + ")");
+
+    // And it loops: 8 more in the next 4 bars.
+    Sequencer seq2;
+    auto ons2 = onsFor (run (seq2, p, g, 32.0), 0);
+    check (ons2.size() == 16, "chain loops (got " + std::to_string (ons2.size()) + ")");
+
+    // Selecting a pattern by parameter waits for the quantise boundary.
+    Project q = emptyProject();
+    q.tracks[0].patterns[0].fills = 1;
+    q.tracks[0].patterns[1].fills = 4;
+    Globals sel;
+    sel.quantise = kNextBar;
+    Sequencer s3;
+    std::vector<Msg> out;
+    const double bps = 120.0 / (60.0 * kSr);
+    const int block = 480;
+    for (long long s = 0; s < (long long) (8.0 / bps); s += block)
+    {
+        BlockInfo b;
+        b.playing = true; b.ppq = s * bps; b.bpm = 120.0; b.sampleRate = kSr; b.numSamples = block;
+        if (b.ppq >= 1.5) sel.selected[0] = 1; // change half way through bar 1
+        s3.process (b, sel, q, [&] (int off, const NoteEvent& e)
+        {
+            out.push_back ({ s + off, e.beat, e.track, e.note, e.velocity, e.on });
+        });
+    }
+    auto qo = onsFor (out, 0);
+    // Bar 1: P1 (1 hit). Bar 2: P2 (4 hits).
+    check (qo.size() == 5, "pattern change lands on the next bar (got " + std::to_string (qo.size()) + ")");
+    check (s3.playingPattern (0) == 1, "lane reports the new pattern");
+}
+
+// ---------------------------------------------------------------------------
+static void testScenes()
+{
+    section ("Scenes");
+
+    Project p = emptyProject();
+    p.tracks[0].patterns[0].fills = 1;
+    p.tracks[0].patterns[1].fills = 4;
+
+    p.scenes[0].used = 1; p.scenes[0].pattern[0] = 0;
+    p.scenes[1].used = 1; p.scenes[1].pattern[0] = 1;
+    p.scenes[2].used = 1; p.scenes[2].muted = 1u; // lane 0 muted
+
+    p.sceneMode = kPlayLoop;
+    p.sceneChainLen = 3;
+    p.sceneChainScene[0] = 0; p.sceneChainBars[0] = 1;
+    p.sceneChainScene[1] = 1; p.sceneChainBars[1] = 1;
+    p.sceneChainScene[2] = 2; p.sceneChainBars[2] = 1;
+
+    Globals g;
+    g.quantise = kNextBar;
+    Sequencer seq;
+    auto ons = onsFor (run (seq, p, g, 12.0, 120.0, 480), 0);
+    // 1 + 4 + 0 = 5 hits in 3 bars.
+    check (ons.size() == 5, "scene chain drives patterns and mutes (got " + std::to_string (ons.size()) + ")");
+
+    // Same again with blocks that don't divide the bar: scene changes must
+    // land on the bar line, not a bar late.
+    for (int block : { 512, 333, 4096 })
+    {
+        Sequencer odd;
+        auto oo = onsFor (run (odd, p, g, 12.0, 120.0, block), 0);
+        check (oo.size() == 5, "scene chain at block size " + std::to_string (block) + " (got " + std::to_string (oo.size()) + ")");
+    }
+
+    p.sceneMode = kPlayOnce;
+    Sequencer once;
+    auto o = onsFor (run (once, p, g, 24.0, 120.0, 480), 0);
+    check (o.size() == 5, "PLAY runs the chain once then holds the last scene (got " + std::to_string (o.size()) + ")");
+}
+
+// ---------------------------------------------------------------------------
+static void testTransport()
+{
+    section ("Transport");
+
+    Project p = emptyProject();
+    p.tracks[0].patterns[0].fills = 4;
+    p.tracks[0].patterns[0].gate = 200; // long notes so one is held at stop
+
+    Globals g;
+    Sequencer seq;
+    std::vector<Msg> out;
+    auto block = [&] (bool playing, double ppq)
+    {
+        BlockInfo b;
+        b.playing = playing; b.ppq = ppq; b.bpm = 120.0; b.sampleRate = kSr; b.numSamples = 512;
+        seq.process (b, g, p, [&] (int off, const NoteEvent& e)
+        {
+            out.push_back ({ off, e.beat, e.track, e.note, e.velocity, e.on });
+        });
+    };
+
+    block (true, 0.0);
+    check (! out.empty() && out[0].on, "a note at the downbeat");
+    block (false, 0.05);
+    check (! out.empty() && ! out.back().on, "stopping closes the held note");
+    check (seq.playingStep (0) == -1, "no step shown when stopped");
+
+    // Starting mid-bar lands on the right step.
+    out.clear();
+    Sequencer mid;
+    BlockInfo b;
+    b.playing = true; b.ppq = 2.0; b.bpm = 120.0; b.sampleRate = kSr; b.numSamples = 64;
+    mid.process (b, g, p, [&] (int off, const NoteEvent& e)
+    {
+        out.push_back ({ off, e.beat, e.track, e.note, e.velocity, e.on });
+    });
+    check (out.size() == 1 && out[0].on && out[0].sample == 0, "starting on beat 3 plays beat 3's kick");
+
+    // A jump re-seeks.
+    out.clear();
+    b.ppq = 9.0;
+    mid.process (b, g, p, [&] (int off, const NoteEvent& e)
+    {
+        out.push_back ({ off, e.beat, e.track, e.note, e.velocity, e.on });
+    });
+    bool hasOn = false;
+    for (auto& x : out) hasOn = hasOn || x.on;
+    check (hasOn, "jumping to a beat plays that beat");
+}
+
+// ---------------------------------------------------------------------------
+static void testStress()
+{
+    section ("Stress");
+
+    Project p;
+    initKit (p);
+    for (auto& t : p.tracks)
+        for (auto& pat : t.patterns)
+        {
+            pat.steps = 32; pat.fills = 32;
+            pat.ratchet.fill (8);
+            pat.nudge.fill (-50);
+            pat.division = kThirtySecondTriplet;
+        }
+    Globals g;
+    g.swing = 99; g.humanise = 100;
+    Sequencer seq;
+    auto m = run (seq, p, g, 8.0, 300.0, 37);
+    check (wellFormed (m), "worst case: every lane, every step, 8x ratchets, max swing and humanise");
+    check (! m.empty(), "and it still plays");
+}
+
+// ---------------------------------------------------------------------------
+int main()
+{
+    testEuclid();
+    testPatternMask();
+    testTiming();
+    testPolymeter();
+    testLayers();
+    testSwing();
+    testMuteSolo();
+    testPatternsAndChains();
+    testScenes();
+    testTransport();
+    testStress();
+
+    std::printf ("\n%d checks, %d failures\n", checks, failures);
+    return failures == 0 ? 0 : 1;
+}

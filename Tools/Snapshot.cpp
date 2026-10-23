@@ -1,0 +1,162 @@
+// Snapshot.cpp — dev tool, built with -DBEADWORK_BUILD_TOOLS=ON.
+//   BeadworkSnapshot panel.png [kit] [scale] [beats] [lane] [layer]   render the panel mid-playback
+//   BeadworkSnapshot --midi [kitIndex] [bars]               print the MIDI a kit sends
+//   BeadworkSnapshot --state-test                           session / kit round trip
+#include <juce_audio_utils/juce_audio_utils.h>
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
+
+namespace
+{
+struct FakeHost final : juce::AudioPlayHead
+{
+    double ppq = 0.0, bpm = 120.0;
+    bool playing = true;
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        PositionInfo info;
+        info.setIsPlaying (playing);
+        info.setBpm (bpm);
+        info.setPpqPosition (ppq);
+        return info;
+    }
+};
+
+// Run the processor for `beats` and hand every block's MIDI to `onMidi`.
+template <typename F>
+void play (BeadworkProcessor& p, FakeHost& host, double beats, F&& onMidi)
+{
+    constexpr double sr = 48000.0;
+    constexpr int block = 512;
+    p.setPlayHead (&host);
+    p.setPlayConfigDetails (0, 2, sr, block);
+    p.prepareToPlay (sr, block);
+    juce::AudioBuffer<float> audio (2, block);
+    juce::MidiBuffer midi;
+    const double bps = host.bpm / (60.0 * sr);
+    const long total = (long) (beats / bps);
+    for (long s = 0; s < total; s += block)
+    {
+        host.ppq = s * bps;
+        midi.clear();
+        p.processBlock (audio, midi);
+        onMidi (midi, host.ppq);
+    }
+}
+} // namespace
+
+int main (int argc, char** argv)
+{
+    juce::ScopedJuceInitialiser_GUI gui;
+    const juce::String first = argc > 1 ? juce::String (argv[1]) : juce::String ("panel.png");
+
+    if (first == "--state-test")
+    {
+        auto a = std::make_unique<BeadworkProcessor>();
+        a->presets.loadIndex (7); // Chain Demo
+        auto& pr = a->store.edit();
+        pr.tracks[3].patterns[5].nudge[7] = -17;
+        pr.tracks[3].patterns[5].forceOn = 0x80000001u;
+        pr.tracks[3].name.fill (0);
+        juce::String ("Clap & Co").copyToUTF8 (pr.tracks[3].name.data(), 15);
+        a->storeScene (2);
+        a->store.markDirty();
+
+        juce::MemoryBlock mb;
+        a->getStateInformation (mb);
+
+        auto b = std::make_unique<BeadworkProcessor>();
+        b->setStateInformation (mb.getData(), (int) mb.getSize());
+
+        const bool same = std::memcmp (&a->store.view(), &b->store.view(), sizeof (beadwork::Project)) == 0;
+        if (! same)
+        {
+            const auto* x = reinterpret_cast<const unsigned char*> (&a->store.view());
+            const auto* y = reinterpret_cast<const unsigned char*> (&b->store.view());
+            int shown = 0;
+            for (size_t i = 0; i < sizeof (beadwork::Project) && shown < 12; ++i)
+                if (x[i] != y[i])
+                {
+                    const size_t track = i / sizeof (beadwork::Track);
+                    const size_t inTrack = i % sizeof (beadwork::Track);
+                    std::printf ("  byte %zu (track %zu, +%zu; pattern %zu +%zu): %d vs %d\n", i, track, inTrack,
+                                 inTrack >= offsetof (beadwork::Track, patterns) ? (inTrack - offsetof (beadwork::Track, patterns)) / sizeof (beadwork::Pattern) : 999,
+                                 inTrack >= offsetof (beadwork::Track, patterns) ? (inTrack - offsetof (beadwork::Track, patterns)) % sizeof (beadwork::Pattern) : 0,
+                                 x[i], y[i]);
+                    ++shown;
+                }
+        }
+        std::printf ("session round trip: %s (%d bytes of XML)\n", same ? "identical" : "DIFFERENT", (int) mb.getSize());
+        std::printf ("kit name restored: %s\n", b->presets.currentName().toRawUTF8());
+        return same ? 0 : 1;
+    }
+
+    if (first == "--midi")
+    {
+        const int kit  = argc > 2 ? juce::String (argv[2]).getIntValue() : 0;
+        const int bars = argc > 3 ? juce::String (argv[3]).getIntValue() : 2;
+        auto p = std::make_unique<BeadworkProcessor>();
+        p->presets.loadIndex (kit);
+        p->store.publishIfDirty();
+        std::printf ("kit: %s\n", p->presets.currentName().toRawUTF8());
+
+        FakeHost host;
+        std::array<juce::String, beadwork::kNumTracks> grid;
+        const int stepsTotal = bars * 16;
+        for (auto& g : grid) g = juce::String::repeatedString (".", stepsTotal);
+        play (*p, host, bars * 4.0, [&] (const juce::MidiBuffer& m, double ppq)
+        {
+            for (const auto meta : m)
+            {
+                const auto msg = meta.getMessage();
+                if (! msg.isNoteOn()) continue;
+                const double beat = ppq + meta.samplePosition * (120.0 / 60.0 / 48000.0);
+                const int step = juce::jlimit (0, stepsTotal - 1, (int) std::floor (beat * 4.0 + 1e-6));
+                for (int t = 0; t < beadwork::kNumTracks; ++t)
+                    if (p->store.view().tracks[(size_t) t].note == msg.getNoteNumber())
+                        grid[(size_t) t] = grid[(size_t) t].replaceSection (step, 1, msg.getVelocity() > 105 ? "X" : "x");
+            }
+        });
+        for (int t = 0; t < beadwork::kNumTracks; ++t)
+        {
+            const auto& n = p->store.view().tracks[(size_t) t].name;
+            std::printf ("%-8s %s\n", n.data(), grid[(size_t) t].toRawUTF8());
+        }
+        return 0;
+    }
+
+    // Panel snapshot.
+    const int    kit   = argc > 2 ? juce::String (argv[2]).getIntValue() : 0;
+    const float  scale = argc > 3 ? (float) juce::String (argv[3]).getDoubleValue() : 1.0f;
+    const double beats = argc > 4 ? juce::String (argv[4]).getDoubleValue() : 5.3;
+
+    auto p = std::make_unique<BeadworkProcessor>();
+    p->presets.loadIndex (kit);
+    p->store.publishIfDirty();
+    FakeHost host;
+    play (*p, host, beats, [] (const juce::MidiBuffer&, double) {});
+
+    BeadworkPanel panel (*p);
+    // Optional: focus a lane and pick an edit layer, for checking the overlays.
+    if (argc > 5) panel.focusLane (juce::String (argv[5]).getIntValue());
+    if (argc > 6) panel.setLayer ((beadwork::ui::Layer) juce::String (argv[6]).getIntValue());
+    if (argc > 7 && juce::String (argv[7]) == "demo")
+    {
+        // A busy 32-step pattern on the focused lane, to eyeball every overlay.
+        const int lane = panel.focusedLane();
+        auto& pt = p->store.edit().tracks[(size_t) lane].patterns[0];
+        pt.steps = 32; pt.fills = 13; pt.rotate = 0;
+        pt.accents = 0x01010101u;
+        for (int s = 0; s < 32; s += 3) { pt.ratchet[(size_t) s] = (uint8_t) (1 + s % 4); pt.stepChance[(size_t) s] = (uint8_t) (20 + s * 2); pt.nudge[(size_t) s] = (int8_t) (s % 2 ? 30 : -30); pt.stepVel[(size_t) s] = (uint8_t) (40 + s * 2); }
+        p->store.markDirty();
+    }
+
+    auto img = panel.createComponentSnapshot (panel.getLocalBounds(), true, scale);
+    juce::File out = juce::File::getCurrentWorkingDirectory().getChildFile (first);
+    out.deleteFile();
+    juce::FileOutputStream os (out);
+    juce::PNGImageFormat png;
+    const bool ok = os.openedOk() && png.writeImageToStream (img, os);
+    std::printf ("%s %s (%dx%d)\n", ok ? "wrote" : "FAILED", out.getFullPathName().toRawUTF8(), img.getWidth(), img.getHeight());
+    return ok ? 0 : 1;
+}

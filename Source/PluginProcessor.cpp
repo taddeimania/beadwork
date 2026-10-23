@@ -141,6 +141,7 @@ void BeadworkProcessor::recallScene (int s)
     const Scene& sc = store.view().scenes[(size_t) s];
     if (! sc.used)
         return;
+    lastScene.store (s);
     for (int t = 0; t < kNumTracks; ++t)
     {
         setParam (ids::pattern (t), (float) (sc.pattern[(size_t) t] + 1));
@@ -153,6 +154,7 @@ void BeadworkProcessor::storeScene (int s)
     if (! juce::isPositiveAndBelow (s, kNumScenes))
         return;
     Scene& sc = store.edit().scenes[(size_t) s];
+    lastScene.store (s);
     sc.used  = 1;
     sc.muted = 0;
     for (int t = 0; t < kNumTracks; ++t)
@@ -205,6 +207,7 @@ void BeadworkProcessor::restoreState (const juce::ValueTree& raw)
 
     presets.restoreName (state["presetName"].toString());
     apvts.replaceState (state);
+    lastScene.store (-1);
 }
 
 void BeadworkProcessor::applyFactoryPreset (const FactoryPreset& fp)
@@ -213,6 +216,7 @@ void BeadworkProcessor::applyFactoryPreset (const FactoryPreset& fp)
     initKit (p);
     if (fp.build)
         fp.build (p);
+    lastScene.store (-1);
     store.markDirty();
     store.publishNow();
 

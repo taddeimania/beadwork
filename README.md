@@ -183,6 +183,9 @@ dice every time round, so a groove you like stays the groove you like.
 The focused lane's sixteen patterns. Click a pattern to play and edit it; the
 switch waits for PATTERN CHANGE. Shift-click adds a pattern to the lane's chain.
 Right-click to copy, paste, clear, copy to every slot, or add to the chain.
+**Copy all lanes** grabs that slot from all twelve lanes at once (the whole
+kit's pattern 3, say) and **Paste all lanes** drops them into another slot, so
+you can start a new kit-wide pattern from an existing one.
 
 **CHAIN** turns the lane's chain on. Each slot plays its pattern N times, then
 moves on, and the chain loops. Drag a slot's top half to change its pattern,
@@ -204,6 +207,12 @@ automate pattern changes in Live's arrangement.
 A scene stores every lane's pattern and mute. Click an empty pad to store the
 current kit into it, click a stored one to recall it, shift-click to
 overwrite. Right-click to rename, clear, or add to the scene chain.
+
+Scene pads light like pattern pads: **amber** is the scene you last recalled or
+stored, and the **green light** means the kit is playing exactly that scene.
+Recall one mid-bar and it turns amber at once; the green light comes on at the
+bar line when its patterns land, and goes out if you then change a lane's
+pattern or mute. While the scene chain runs, both follow the chain.
 
 | Mode | What it does |
 | --- | --- |

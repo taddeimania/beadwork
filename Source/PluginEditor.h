@@ -73,6 +73,8 @@ private:
     void openPresetMenu();
     void savePresetAs();
     void patternMenu (int slot);
+    void patternAction (int slot, int choice);   // what each item in patternMenu does
+    bool scenePlaying (int scene);               // is the kit playing exactly this scene?
     void sceneMenu (int scene);
     void laneChainMenu (int slot);
     void sceneChainMenu (int slot);
@@ -84,7 +86,9 @@ private:
 
     int focus = 0;
     beadwork::ui::Layer currentLayer = beadwork::ui::Layer::beads;
-    std::optional<beadwork::Pattern> clipboard;
+    std::optional<beadwork::Pattern> clipboard;                                    // one lane's pattern
+    std::optional<std::array<beadwork::Pattern, beadwork::kNumTracks>> kitClipboard; // a slot from every lane
+    int kitClipboardFrom = 0;
 
     // Lanes
     std::vector<std::unique_ptr<beadwork::ui::LaneRow>> rows;

@@ -247,7 +247,7 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
     // --- pattern bank -----------------------------------------------------------------
     patternPads.setBounds (24, kBankY + 30, 416, 80);
     patternPads.setTooltip ("This lane's sixteen patterns. Click to play and edit one; shift-click to add it to "
-                            "the lane's chain; right-click to copy, paste or clear.");
+                            "the lane's chain; right-click to copy, paste or clear, for this lane or all lanes at once.");
     patternPads.getState = [this] (int i)
     {
         PadGrid::PadState s;
@@ -325,7 +325,7 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
     // --- scenes -------------------------------------------------------------------------
     const int sx = 474;
     scenePads.setBounds (sx, kBankY + 30, 418, 80);
-    scenePads.colour = colours::cream;
+    scenePads.colour = colours::brand;   // same amber as the pattern pads
     scenePads.setTooltip ("Scenes: every lane's pattern and mute in one pad. Click an empty pad to store, a full "
                           "one to recall. Shift-click overwrites. Right-click for more.");
     scenePads.label = [this] (int i)
@@ -336,11 +336,22 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
     };
     scenePads.getState = [this] (int i)
     {
+        // Lit the same way as the pattern pads: amber for the scene you picked
+        // (last recalled or stored), and a green light once that's what the
+        // kit is actually playing. While the scene chain runs, both follow it.
         PadGrid::PadState s;
-        s.used     = project().scenes[(size_t) i].used != 0;
-        s.playing  = proc.sceneChainRunning() && proc.scene() == i;
-        s.selected = s.playing;
-        s.dim      = ! s.used;
+        s.used = project().scenes[(size_t) i].used != 0;
+        s.dim  = ! s.used;
+        if (proc.sceneChainRunning())
+        {
+            s.selected = proc.scene() == i;
+            s.playing  = s.selected;
+        }
+        else
+        {
+            s.selected = proc.selectedScene() == i && s.used;
+            s.playing  = s.selected && proc.isRunning() && scenePlaying (i);
+        }
         return s;
     };
     scenePads.onClick = [this] (int i, const juce::ModifierKeys& m)
@@ -580,6 +591,26 @@ int BeadworkPanel::editPattern (int lane)
     return juce::jlimit (0, kPatternsPerTrack - 1, juce::roundToInt (proc.getParam (ids::pattern (lane))) - 1);
 }
 
+bool BeadworkPanel::scenePlaying (int scene)
+{
+    // The kit is playing a scene when every lane is on the scene's pattern and
+    // its mute matches. A lane that's chaining follows its chain, not the
+    // scene, so only its mute counts.
+    const Scene& sc = project().scenes[(size_t) scene];
+    if (! sc.used)
+        return false;
+    for (int t = 0; t < kNumTracks; ++t)
+    {
+        const bool chained = project().tracks[(size_t) t].chainOn != 0;
+        if (! chained && proc.playingPattern (t) != sc.pattern[(size_t) t])
+            return false;
+        const bool sceneMute = ((sc.muted >> t) & 1u) != 0;
+        if ((proc.getParam (ids::mute (t)) > 0.5f) != sceneMute)
+            return false;
+    }
+    return true;
+}
+
 bool BeadworkPanel::playingShown (int lane)
 {
     return proc.isRunning() && proc.playingPattern (lane) == editPattern (lane);
@@ -752,28 +783,59 @@ void BeadworkPanel::patternMenu (int slot)
     m.addSeparator();
     m.addItem (4, "Copy to every slot on this lane");
     m.addItem (5, "Add to the chain");
+    m.addSeparator();
+    m.addSectionHeader ("All twelve lanes");
+    m.addItem (6, "Copy all lanes (pattern " + String (slot + 1) + " of every lane)");
+    m.addItem (7, kitClipboard ? "Paste all lanes (from pattern " + String (kitClipboardFrom + 1) + ")"
+                               : String ("Paste all lanes"),
+               kitClipboard.has_value());
 
     auto safe = juce::Component::SafePointer<BeadworkPanel> (this);
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&patternPads),
                      [safe, slot] (int r)
                      {
-                         if (safe == nullptr || r <= 0) return;
-                         auto& t = safe->focusedTrack();
-                         auto& p = t.patterns[(size_t) slot];
-                         switch (r)
-                         {
-                             case 1: safe->clipboard = p; break;
-                             case 2: if (safe->clipboard) p = *safe->clipboard; break;
-                             case 3: { Pattern blank; blank.fills = 0; blank.velocity = p.velocity; p = blank; break; }
-                             case 4: t.patterns.fill (p); break;
-                             case 5:
-                                 if (! t.chainOn) { t.chainOn = 1; t.chainLen = 1; t.chainPattern[0] = (uint8_t) slot; t.chainRepeats[0] = 1; }
-                                 else if (t.chainLen < kMaxChain) { t.chainPattern[t.chainLen] = (uint8_t) slot; t.chainRepeats[t.chainLen] = 1; ++t.chainLen; }
-                                 break;
-                             default: break;
-                         }
-                         safe->edited();
+                         if (safe != nullptr && r > 0)
+                             safe->patternAction (slot, r);
                      });
+}
+
+void BeadworkPanel::patternAction (int slot, int choice)
+{
+    auto& t = focusedTrack();
+    auto& p = t.patterns[(size_t) slot];
+    switch (choice)
+    {
+        case 1: clipboard = p; break;
+        case 2: if (clipboard) p = *clipboard; break;
+        case 3: { Pattern blank; blank.fills = 0; blank.velocity = p.velocity; p = blank; break; }
+        case 4: t.patterns.fill (p); break;
+        case 5:
+            if (! t.chainOn) { t.chainOn = 1; t.chainLen = 1; t.chainPattern[0] = (uint8_t) slot; t.chainRepeats[0] = 1; }
+            else if (t.chainLen < kMaxChain) { t.chainPattern[t.chainLen] = (uint8_t) slot; t.chainRepeats[t.chainLen] = 1; ++t.chainLen; }
+            break;
+        case 6:
+        {
+            // The whole kit's pattern N: this slot from every lane.
+            std::array<Pattern, kNumTracks> all {};
+            for (int i = 0; i < kNumTracks; ++i)
+                all[(size_t) i] = project().tracks[(size_t) i].patterns[(size_t) slot];
+            kitClipboard     = all;
+            kitClipboardFrom = slot;
+            statusText  = "Copied P" + String (slot + 1) + " of all lanes";
+            statusTicks = 60;
+            return;
+        }
+        case 7:
+            if (! kitClipboard)
+                return;
+            for (int i = 0; i < kNumTracks; ++i)
+                project().tracks[(size_t) i].patterns[(size_t) slot] = (*kitClipboard)[(size_t) i];
+            statusText  = "Pasted all lanes into P" + String (slot + 1);
+            statusTicks = 60;
+            break;
+        default: return;
+    }
+    edited();
 }
 
 void BeadworkPanel::sceneMenu (int scene)
@@ -817,7 +879,11 @@ void BeadworkPanel::sceneMenu (int scene)
                                  }), false);
                                  return;
                              }
-                             case 4: p.scenes[(size_t) scene] = Scene {}; break;
+                             case 4:
+                                 p.scenes[(size_t) scene] = Scene {};
+                                 if (safe->proc.selectedScene() == scene)
+                                     safe->proc.setSelectedScene (-1);
+                                 break;
                              case 5:
                                  if (p.sceneChainLen < kMaxSceneChain)
                                  {

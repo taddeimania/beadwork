@@ -48,6 +48,11 @@ public:
     void reroll();                         // new dice for chance, humanise, random direction
     void recallScene (int scene);          // writes the lane pattern / mute parameters
     void storeScene (int scene);           // snapshots them into the scene
+
+    // The scene last recalled or stored (-1: none). Lit amber on the panel, the
+    // way a picked pattern is. Kept here so it survives closing the editor.
+    int  selectedScene() const noexcept { return lastScene.load(); }
+    void setSelectedScene (int s) noexcept { lastScene.store (s); }
     void setParam (const juce::String& id, float plainValue);
     float getParam (const juce::String& id) const { return params.at (id)->load(); }
 
@@ -73,6 +78,7 @@ private:
 
     std::atomic<uint64_t> seed { 0x9E3779B97F4A7C15ull };
     std::atomic<bool>     restartRequested { false };
+    std::atomic<int>      lastScene { -1 };
 
     std::array<std::atomic<int>, beadwork::kNumTracks> uiStep {}, uiPattern {}, uiChain {}, uiHits {};
     std::atomic<int>  uiSceneSlot { 0 }, uiScene { 0 };

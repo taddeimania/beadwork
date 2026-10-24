@@ -103,7 +103,7 @@ int main (int argc, char** argv)
         const auto& tr = a->store.view().tracks;
         check (a->maps.currentName() == "General MIDI" && ! a->maps.edited(), "opens on General MIDI, unedited");
 
-        check (a->maps.loadIndex (1), "load Chromatic C1-B1");
+        check (a->maps.loadIndex (1), "load Chromatic C1-D#2");
         check (tr[0].note == 36 && tr[3].note == 39 && name (tr[0]) == "C1" && name (tr[1]) == "C#1", "chromatic notes and labels");
         check (tr[0].patterns[0].fills == 4, "patterns untouched by the map");
 

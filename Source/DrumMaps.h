@@ -1,15 +1,15 @@
 // DrumMaps.h — which pad each lane plays, kept apart from the kit.
 //
-// A drum map is, for each of the twelve lanes, the MIDI note it sends, the
+// A drum map is, for each of the sixteen lanes, the MIDI note it sends, the
 // label on the panel and its MIDI channel. Kits carry patterns, chains and
 // scenes; maps carry the wiring to one drum rack. Loading a kit never touches
 // the map, and loading a map never touches the patterns, so one map per rack
 // works with every kit.
 //
-// User maps live in   <user app data>/Beadwork/Maps/*.beadmap
-//   macOS:   ~/Library/Application Support/Beadwork/Maps
-//   Windows: %APPDATA%\Beadwork\Maps
-//   Linux:   ~/.config/Beadwork/Maps
+// User maps live in   <user app data>/Beadwork/Kit Maps/*.beadmap
+//   macOS:   ~/Library/Application Support/Beadwork/Kit Maps
+//   Windows: %APPDATA%\Beadwork\Kit Maps
+//   Linux:   ~/.config/Beadwork/Kit Maps
 //
 // Message thread only.
 #pragma once

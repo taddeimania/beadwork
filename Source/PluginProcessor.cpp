@@ -38,7 +38,7 @@ bool BeadworkProcessor::isBusesLayoutSupported (const BusesLayout& layouts) cons
 
 void BeadworkProcessor::prepareToPlay (double, int)
 {
-    // Twelve lanes of 8x ratchets on 32 steps is the worst case per pass; a
+    // Sixteen lanes of 8x ratchets on 32 steps is the worst case per pass; a
     // block never holds more than a few hundred events, but the buffer keeps
     // its capacity once grown so size it generously up front.
     generated.ensureSize (8192);

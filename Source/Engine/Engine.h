@@ -5,7 +5,7 @@
 //
 // Model
 // -----
-//   * Twelve independent TRACKS. Each track fires one MIDI note, so a track is
+//   * Sixteen independent TRACKS. Each track fires one MIDI note, so a track is
 //     one lane of a drum rack (kick, snare, closed hat, ...).
 //   * Each track owns sixteen PATTERNS. A pattern is a Euclidean recipe --
 //     STEPS slots, FILLS beads distributed evenly among them, ROTATEd -- plus
@@ -60,7 +60,7 @@ namespace beadwork
 // ---------------------------------------------------------------------------
 // Sizes
 // ---------------------------------------------------------------------------
-constexpr int kNumTracks       = 12;
+constexpr int kNumTracks       = 16; // one per pad of a 4 x 4 drum rack
 constexpr int kMaxSteps        = 32;
 constexpr int kPatternsPerTrack = 16;
 constexpr int kNumScenes       = 16;
@@ -352,7 +352,7 @@ static_assert (std::has_unique_object_representations_v<Track>);
 static_assert (std::has_unique_object_representations_v<Scene>);
 static_assert (std::has_unique_object_representations_v<Project>);
 
-// Fill a project with a sensible twelve-lane drum kit: the General MIDI /
+// Fill a project with a sensible sixteen-lane drum kit: the General MIDI /
 // Ableton drum-rack note layout and a starter figure on each lane.
 void initKit (Project& p) noexcept;
 

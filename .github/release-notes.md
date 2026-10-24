@@ -1,14 +1,14 @@
-Beadwork 1.2.0: your drum rack's wiring and your grooves are now saved separately.
-
-### New
-- **Kit maps.** A new **KIT MAP** selector in the header holds each lane's label, MIDI note and channel. Save one per drum rack and pick it whenever you use that rack. The factory maps are General MIDI (the lane names and notes Beadwork has always opened with), Chromatic C1-B1 and Chromatic C2-B2. A `*` after the map's name means you've changed a note, label or channel since loading it, and **Save** in the map's menu updates one of your maps in place.
-- **Grooves.** What used to be called a kit is now a **GROOVE**: the beads and hand edits, all sixteen patterns per lane, the chains, the scenes and the feel knobs. Loading a groove never touches the kit map, and loading a kit map never touches the groove, so any groove plays on any rack.
+Beadwork 1.3.0: sixteen lanes, one for every pad of a standard drum rack.
 
 ### Changed
-- **Init Kit** is now **Init Groove**, and **Empty** only clears the beads. It leaves your lane notes and labels alone.
-- Your saves live in `~/Library/Application Support/Beadwork/` (`%APPDATA%\Beadwork` on Windows, `~/.config/Beadwork` on Linux), with kit maps in `Kit Maps/` and grooves in `Grooves/`.
-- **Upgrading:** kits saved by 1.1.0 and earlier are copied from `Presets/` into `Grooves/` the first time you run 1.2.0. They load as grooves, so their old notes and labels are left out; pick or save a kit map for them.
-- The two PDF guides and the README cover kit maps and grooves.
+- **Sixteen lanes** instead of twelve, so all sixteen pads of Live's default Drum Rack (C1 to D#2) get a lane. The panel stays the same size; the rows are a little shorter.
+- **General MIDI kit map:** lanes 1 to 12 are unchanged. Lanes 13 to 16 are Snare 2 (E1), Floor Tom (G1), LoMid Tom (B1) and High Tom (D2), the four rack pads the old map left out.
+- **Chromatic kit maps** now span sixteen pads and are called Chromatic C1-D#2 and Chromatic C2-D#3.
+- Lanes 13 to 16 have their own Pattern, Mute, Solo and Level parameters for automation. Automation on lanes 1 to 12 keeps working.
+- The README and both PDF guides cover sixteen lanes.
+
+### Upgrading
+Sets, grooves and kit maps saved by 1.2.0 and earlier load into lanes 1 to 12. Lanes 13 to 16 start empty on their default notes. If you saved a kit map for a rack, add the last four pads and save it again.
 
 ### Install
 Download the file for your system below.

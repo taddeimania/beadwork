@@ -39,7 +39,7 @@ MATCH LANES TO PADS
 Pick a kit map from KIT MAP at the top of the panel:
 
 - Drum Kit Designer uses the General MIDI drum notes: choose "General MIDI".
-- Drum Machine Designer's pads run upwards from C1: choose "Chromatic C1-B1",
+- Drum Machine Designer's pads run upwards from C1: choose "Chromatic C1-D#2",
   then double-click each lane's name to label it after its pad.
 
 Then KIT MAP > Save as..., named after the kit, so you only do this once.

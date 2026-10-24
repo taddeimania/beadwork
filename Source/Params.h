@@ -2,7 +2,7 @@
 //
 // Only the performance controls are host parameters: the global feel knobs and,
 // per lane, mute / solo / pattern / level. That is what you'd want to automate
-// in an arrangement. The pattern banks themselves (twelve lanes x sixteen
+// in an arrangement. The pattern banks themselves (sixteen lanes x sixteen
 // patterns x per-step layers) live in the Project and are saved with the
 // session, but are not exposed as thousands of automation lanes.
 #pragma once

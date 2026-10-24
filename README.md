@@ -2,7 +2,7 @@
 
 A Euclidean drum sequencer, built as a VST3 MIDI generator for Ableton Live,
 and as an Audio Unit MIDI effect for Logic Pro.
-Twelve lanes, one per drum-rack pad. Each lane threads a number of beads as
+Sixteen lanes, one per pad of a drum rack. Each lane threads a number of beads as
 evenly as possible round a necklace of steps (Bjorklund's algorithm), and you
 take it from there: turn the necklace, add and remove beads by hand, accent
 them, ratchet them, give them a chance of playing, nudge them early or late.
@@ -290,7 +290,7 @@ in front of Drum Machine Designer, Drum Kit Designer or any drum instrument.
 4. Press play. Beadwork follows Logic's transport.
 
 For Drum Kit Designer pick the **General MIDI** kit map. Drum Machine
-Designer's pads run up from C1, so pick **Chromatic C1-B1** and label the
+Designer's pads run up from C1, so pick **Chromatic C1-D#2** and label the
 lanes. Then save a kit map for that kit. Grooves and kit maps are shared with
 the VST3, so a groove saved in Live loads in Logic.
 
@@ -306,9 +306,13 @@ also comes in the download, has the steps.
 
 ### Lanes
 
-Twelve rows, one per lane: a gate LED that blinks on every hit, the name
+Sixteen rows, one per lane: a gate LED that blinks on every hit, the name
 (double-click to rename), the MIDI note, **M**ute, **S**olo, the pattern on
 screen, and the beads. Click a row to focus it in the necklace.
+
+Sets, grooves and kit maps saved by 1.2.0 and earlier, which had twelve
+lanes, load into lanes 1 to 12; lanes 13 to 16 start empty on their default
+notes.
 
 Mute is a gate, not a stop: a muted lane keeps its place and comes back in
 time.
@@ -391,7 +395,7 @@ dice every time round, so a groove you like stays the groove you like.
 The focused lane's sixteen patterns. Click a pattern to play and edit it; the
 switch waits for PATTERN CHANGE. Shift-click adds a pattern to the lane's chain.
 Right-click to copy, paste, clear, copy to every slot, or add to the chain.
-**Copy all lanes** grabs that slot from all twelve lanes at once (the whole
+**Copy all lanes** grabs that slot from all sixteen lanes at once (the whole
 kit's pattern 3, say) and **Paste all lanes** drops them into another slot, so
 you can start a new kit-wide pattern from an existing one.
 
@@ -503,9 +507,11 @@ labels are left out.
 
 Factory kit maps:
 
-- **General MIDI**: Kick, Rim, Snare, Clap, hats, toms, Pedal, Crash and Ride
-  on the General MIDI drum notes, which is where Live's own kits put them.
-- **Chromatic C1-B1** and **Chromatic C2-B2**: twelve pads in a row, labelled
+- **General MIDI**: Kick, Rim, Snare, Clap, hats, toms, Pedal, Crash, Ride and
+  a second snare on the General MIDI drum notes, which is where Live's own kits
+  put them. The sixteen lanes cover all sixteen pads of a standard Drum Rack,
+  C1 to D#2.
+- **Chromatic C1-D#2** and **Chromatic C2-D#3**: sixteen pads in a row, labelled
   with their notes.
 
 Factory grooves:

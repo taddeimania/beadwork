@@ -21,7 +21,7 @@ DrumMap generalMidi()
 
 DrumMap chromatic (int first)
 {
-    // Twelve pads in a row, labelled with their notes, Live's way (C1 = 36).
+    // Sixteen pads in a row, labelled with their notes, Live's way (C1 = 36).
     DrumMap m;
     for (int i = 0; i < kNumTracks; ++i)
     {
@@ -96,8 +96,8 @@ const std::vector<FactoryMap>& factoryMaps()
 {
     static const std::vector<FactoryMap> maps {
         { defaultMapName,     generalMidi() },
-        { "Chromatic C1-B1",  chromatic (36) },
-        { "Chromatic C2-B2",  chromatic (48) },
+        { "Chromatic C1-D#2", chromatic (36) },   // Live's default drum rack, all 16 pads
+        { "Chromatic C2-D#3", chromatic (48) },
     };
     return maps;
 }

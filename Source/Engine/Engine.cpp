@@ -103,6 +103,12 @@ void initKit (Project& p) noexcept
         { "Pedal",   44, 16, 0, 0,  80 },
         { "Crash",   49, 16, 0, 0, 100 },
         { "Ride",    51, 16, 0, 0,  85 },
+        // Lanes 13-16 fill out the sixteen pads (C1 to D#2) of Live's default
+        // drum rack, keeping lanes 1-12 where older sets expect them.
+        { "Snare 2",   40, 16, 0, 0, 100 },
+        { "Floor Tom", 43, 16, 0, 0,  95 },
+        { "LoMid Tom", 47, 16, 0, 0,  95 },
+        { "High Tom",  50, 16, 0, 0,  95 },
     };
 
     p = Project {};

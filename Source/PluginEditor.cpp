@@ -8,8 +8,8 @@ using juce::String;
 namespace
 {
 // Layout (design space).
-constexpr int kLanesX = 20, kLanesY = 92, kRowH = 50, kLanesW = 876;
-constexpr int kLayerY = kLanesY + kNumTracks * kRowH + 6;   // 698
+constexpr int kLanesX = 20, kLanesY = 90, kRowH = 38, kLanesW = 876;
+constexpr int kLayerY = kLanesY + kNumTracks * kRowH + 4;   // 702
 constexpr int kBankY  = 748;
 constexpr int kRightX = 916;
 
@@ -440,7 +440,7 @@ BeadworkPanel::BeadworkPanel (BeadworkProcessor& p)
     presetDisplay.setBounds (1046, 20, 300, 34);
     presetDisplay.getText = [this] { return proc.presets.currentName(); };
     presetDisplay.onOpen  = [this] { openPresetMenu(); };
-    presetDisplay.setTooltip ("Grooves: the beads, patterns, chains, scenes and feel of all twelve lanes. "
+    presetDisplay.setTooltip ("Grooves: the beads, patterns, chains, scenes and feel of all sixteen lanes. "
                               "Changing groove keeps your kit map.");
     addButton (tipsBtn, { 878, 24, 56, 26 },
                "Tooltips on or off. Remembered for every Beadwork, in every set.",
@@ -799,7 +799,7 @@ void BeadworkPanel::openPresetMenu()
 
 void BeadworkPanel::savePresetAs()
 {
-    auto* w = new juce::AlertWindow ("Save groove", "Name the beads, patterns, chains and scenes of all twelve lanes. "
+    auto* w = new juce::AlertWindow ("Save groove", "Name the beads, patterns, chains and scenes of all sixteen lanes. "
                                      "The kit map (notes and labels) is saved separately.",
                                      juce::MessageBoxIconType::NoIcon, this);
     w->addTextEditor ("name", proc.presets.currentName(), "Name");
@@ -890,7 +890,7 @@ void BeadworkPanel::openMapMenu()
 
 void BeadworkPanel::saveMapAs()
 {
-    auto* w = new juce::AlertWindow ("Save kit map", "Name the twelve lane labels and MIDI notes, "
+    auto* w = new juce::AlertWindow ("Save kit map", "Name the sixteen lane labels and MIDI notes, "
                                      "e.g. after the drum rack they play.",
                                      juce::MessageBoxIconType::NoIcon, this);
     w->addTextEditor ("name", proc.maps.currentIsUser() ? proc.maps.currentName() : String(), "Name");
@@ -920,7 +920,7 @@ void BeadworkPanel::patternMenu (int slot)
     m.addItem (4, "Copy to every slot on this lane");
     m.addItem (5, "Add to the chain");
     m.addSeparator();
-    m.addSectionHeader ("All twelve lanes");
+    m.addSectionHeader ("All sixteen lanes");
     m.addItem (6, "Copy all lanes (pattern " + String (slot + 1) + " of every lane)");
     m.addItem (7, kitClipboard ? "Paste all lanes (from pattern " + String (kitClipboardFrom + 1) + ")"
                                : String ("Paste all lanes"),

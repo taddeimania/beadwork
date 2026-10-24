@@ -7,11 +7,14 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <string>
 #include <vector>
 
 using namespace beadwork;
 
+// A Sequencer is about 170 KB, so every test keeps its sequencers on the heap:
+// several on the stack at once overflow Windows' 1 MB default stack.
 namespace
 {
 int failures = 0;
@@ -210,7 +213,7 @@ static void testTiming()
     Pattern& k = p.tracks[0].patterns[0];
     k.steps = 16; k.fills = 4;
 
-    Sequencer seq;
+    auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
     auto m = run (seq, p, g, 16.0);
     auto ons = onsFor (m, 0);
 
@@ -226,7 +229,8 @@ static void testTiming()
     check (wellFormed (m), "note-ons and offs are balanced");
 
     // Block size must not change anything.
-    Sequencer a, b;
+    auto aOwned = std::make_unique<Sequencer>(); auto& a = *aOwned;
+    auto bOwned = std::make_unique<Sequencer>(); auto& b = *bOwned;
     auto ma = run (a, p, g, 8.0, 120.0, 64);
     auto mb = run (b, p, g, 8.0, 120.0, 1999);
     bool same = ma.size() == mb.size();
@@ -235,7 +239,7 @@ static void testTiming()
     check (same, "identical output at block sizes 64 and 1999");
 
     // Clock rate halves everything.
-    Sequencer h;
+    auto hOwned = std::make_unique<Sequencer>(); auto& h = *hOwned;
     Globals g2 = g; g2.rate = 0.5;
     auto mh = onsFor (run (h, p, g2, 8.0), 0);
     check (mh.size() == 4, "clock /2: half the kicks (got " + std::to_string (mh.size()) + ")");
@@ -254,7 +258,7 @@ static void testPolymeter()
     p.tracks[0].patterns[0].steps = 16; p.tracks[0].patterns[0].fills = 1;
     p.tracks[1].patterns[0].steps = 12; p.tracks[1].patterns[0].fills = 1;
 
-    Sequencer seq;
+    auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
     auto m = run (seq, p, g, 12.0);
     check (onsFor (m, 0).size() == 3, "16-step lane: 3 hits in 3 bars");
     check (onsFor (m, 1).size() == 4, "12-step lane: 4 hits in 3 bars");
@@ -263,7 +267,7 @@ static void testPolymeter()
     Project q = emptyProject();
     Pattern& r = q.tracks[2].patterns[0];
     r.steps = 5; r.fills = 5; r.fit = kPolyrhythm; r.fitBars = 1;
-    Sequencer s2;
+    auto s2Owned = std::make_unique<Sequencer>(); auto& s2 = *s2Owned;
     auto ons = onsFor (run (s2, q, g, 4.0), 2);
     check (ons.size() == 5, "quintuplet bar: 5 hits");
     if (ons.size() == 5)
@@ -283,7 +287,7 @@ static void testLayers()
     pat.accents = 1u << 2;
     pat.ratchet[3] = 3;
 
-    Sequencer seq;
+    auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
     auto m   = run (seq, p, g, 4.0);
     auto ons = onsFor (m, 0);
     check (ons.size() == 6, "4 steps with a 3x ratchet on the last: 6 hits (got " + std::to_string (ons.size()) + ")");
@@ -300,19 +304,19 @@ static void testLayers()
     Pattern& cp = c.tracks[0].patterns[0];
     cp.steps = 4; cp.fills = 4; cp.division = kQuarter;
     cp.stepChance[1] = 1; // 1 %
-    Sequencer cs;
+    auto csOwned = std::make_unique<Sequencer>(); auto& cs = *csOwned;
     auto cons = onsFor (run (cs, c, g, 400.0), 0);
     // 100 passes: steps 0,2,3 always fire (300), step 1 about once.
     check (cons.size() >= 300 && cons.size() <= 306, "1 % step fires rarely (got " + std::to_string (cons.size()) + ")");
 
     cp.stepChance[1] = 0;
     cp.chance = 50;
-    Sequencer cs2;
+    auto cs2Owned = std::make_unique<Sequencer>(); auto& cs2 = *cs2Owned;
     auto half = onsFor (run (cs2, c, g, 400.0), 0);
     check (half.size() > 160 && half.size() < 240, "50 % pattern chance is about half (got " + std::to_string (half.size()) + ")");
 
     // Same seed, same dice.
-    Sequencer cs3;
+    auto cs3Owned = std::make_unique<Sequencer>(); auto& cs3 = *cs3Owned;
     auto again = onsFor (run (cs3, c, g, 400.0), 0);
     bool same = again.size() == half.size();
     for (size_t i = 0; same && i < half.size(); ++i) same = again[i].sample == half[i].sample;
@@ -323,7 +327,7 @@ static void testLayers()
     Pattern& np = n.tracks[0].patterns[0];
     np.steps = 4; np.fills = 4; np.division = kQuarter;
     np.nudge[1] = 25;
-    Sequencer ns;
+    auto nsOwned = std::make_unique<Sequencer>(); auto& ns = *nsOwned;
     auto nons = onsFor (run (ns, n, g, 4.0), 0);
     if (nons.size() == 4)
         checkNear (nons[1].beat, 1.25, 1e-9, "nudge +25 % pushes a quarter of a step late");
@@ -342,7 +346,7 @@ static void testSwing()
     Pattern& h = p.tracks[4].patterns[0];
     h.steps = 16; h.fills = 16;
 
-    Sequencer seq;
+    auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
     auto ons = onsFor (run (seq, p, g, 4.0), 4);
     check (ons.size() == 16, "16 hats");
     if (ons.size() == 16)
@@ -353,7 +357,7 @@ static void testSwing()
     }
 
     g.swing = 50; g.swingVel = 0;
-    Sequencer s2;
+    auto s2Owned = std::make_unique<Sequencer>(); auto& s2 = *s2Owned;
     auto v = onsFor (run (s2, p, g, 1.0), 4);
     if (v.size() >= 2)
         check (v[1].velocity < v[0].velocity, "swing velocity < 50 accents the first of each pair");
@@ -370,20 +374,20 @@ static void testMuteSolo()
 
     Globals g;
     g.muted[0] = true;
-    Sequencer a;
+    auto aOwned = std::make_unique<Sequencer>(); auto& a = *aOwned;
     auto m = run (a, p, g, 4.0);
     check (onsFor (m, 0).empty(),  "muted lane is silent");
     check (onsFor (m, 2).size() == 2, "other lanes play on");
 
     Globals s;
     s.soloed[2] = true;
-    Sequencer b;
+    auto bOwned = std::make_unique<Sequencer>(); auto& b = *bOwned;
     auto ms = run (b, p, s, 4.0);
     check (onsFor (ms, 0).empty() && onsFor (ms, 2).size() == 2, "solo silences everything else");
 
     // Mute is a gate: unmuting mid-bar picks up in place.
     Globals g3;
-    Sequencer c;
+    auto cOwned = std::make_unique<Sequencer>(); auto& c = *cOwned;
     run (c, p, g3, 2.0);
     check (c.playingStep (0) >= 0, "a lane reports its step while playing");
 }
@@ -407,12 +411,12 @@ static void testPatternsAndChains()
     t.chainPattern[2] = 2; t.chainRepeats[2] = 1;
 
     Globals g;
-    Sequencer seq;
+    auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
     auto ons = onsFor (run (seq, p, g, 16.0), 0);
     check (ons.size() == 8, "chain P1x2 P2 P3 over 4 bars: 8 hits (got " + std::to_string (ons.size()) + ")");
 
     // And it loops: 8 more in the next 4 bars.
-    Sequencer seq2;
+    auto seq2Owned = std::make_unique<Sequencer>(); auto& seq2 = *seq2Owned;
     auto ons2 = onsFor (run (seq2, p, g, 32.0), 0);
     check (ons2.size() == 16, "chain loops (got " + std::to_string (ons2.size()) + ")");
 
@@ -422,7 +426,7 @@ static void testPatternsAndChains()
     q.tracks[0].patterns[1].fills = 4;
     Globals sel;
     sel.quantise = kNextBar;
-    Sequencer s3;
+    auto s3Owned = std::make_unique<Sequencer>(); auto& s3 = *s3Owned;
     std::vector<Msg> out;
     const double bps = 120.0 / (60.0 * kSr);
     const int block = 480;
@@ -463,7 +467,7 @@ static void testScenes()
 
     Globals g;
     g.quantise = kNextBar;
-    Sequencer seq;
+    auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
     auto ons = onsFor (run (seq, p, g, 12.0, 120.0, 480), 0);
     // 1 + 4 + 0 = 5 hits in 3 bars.
     check (ons.size() == 5, "scene chain drives patterns and mutes (got " + std::to_string (ons.size()) + ")");
@@ -472,13 +476,13 @@ static void testScenes()
     // land on the bar line, not a bar late.
     for (int block : { 512, 333, 4096 })
     {
-        Sequencer odd;
+        auto oddOwned = std::make_unique<Sequencer>(); auto& odd = *oddOwned;
         auto oo = onsFor (run (odd, p, g, 12.0, 120.0, block), 0);
         check (oo.size() == 5, "scene chain at block size " + std::to_string (block) + " (got " + std::to_string (oo.size()) + ")");
     }
 
     p.sceneMode = kPlayOnce;
-    Sequencer once;
+    auto onceOwned = std::make_unique<Sequencer>(); auto& once = *onceOwned;
     auto o = onsFor (run (once, p, g, 24.0, 120.0, 480), 0);
     check (o.size() == 5, "PLAY runs the chain once then holds the last scene (got " + std::to_string (o.size()) + ")");
 }
@@ -493,7 +497,7 @@ static void testTransport()
     p.tracks[0].patterns[0].gate = 200; // long notes so one is held at stop
 
     Globals g;
-    Sequencer seq;
+    auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
     std::vector<Msg> out;
     auto block = [&] (bool playing, double ppq)
     {
@@ -513,7 +517,7 @@ static void testTransport()
 
     // Starting mid-bar lands on the right step.
     out.clear();
-    Sequencer mid;
+    auto midOwned = std::make_unique<Sequencer>(); auto& mid = *midOwned;
     BlockInfo b;
     b.playing = true; b.ppq = 2.0; b.bpm = 120.0; b.sampleRate = kSr; b.numSamples = 64;
     mid.process (b, g, p, [&] (int off, const NoteEvent& e)
@@ -551,7 +555,7 @@ static void testStress()
         }
     Globals g;
     g.swing = 99; g.humanise = 100;
-    Sequencer seq;
+    auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
     auto m = run (seq, p, g, 8.0, 300.0, 37);
     check (wellFormed (m), "worst case: every lane, every step, 8x ratchets, max swing and humanise");
     check (! m.empty(), "and it still plays");
@@ -594,7 +598,7 @@ static void testScatter()
     // REVERSE, depth 1 (a one-beat window): the beat plays back to front.
     {
         Globals g; g.scatter = true; g.scatterType = 1; g.scatterDepth = 1;
-        Sequencer seq;
+        auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
         auto ons = onsFor (run (seq, p, g, 1.0), 0);
         check (ons.size() == 2, "reverse: two hits in the beat (got " + std::to_string (ons.size()) + ")");
         if (ons.size() == 2)
@@ -609,7 +613,7 @@ static void testScatter()
     // STUTTER, depth 1: every pair repeats its first step.
     {
         Globals g; g.scatter = true; g.scatterType = 0; g.scatterDepth = 1;
-        Sequencer seq;
+        auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
         auto ons = onsFor (run (seq, p, g, 1.0), 0);
         check (ons.size() == 2, "stutter: two hits (got " + std::to_string (ons.size()) + ")");
         if (ons.size() == 2)
@@ -621,7 +625,7 @@ static void testScatter()
         Project q = emptyProject();
         q.tracks[0].patterns[0].fills = 4;
         Globals g; g.scatter = true; g.scatterType = 2; g.scatterDepth = 7;
-        Sequencer seq;
+        auto seqOwned = std::make_unique<Sequencer>(); auto& seq = *seqOwned;
         auto ons = onsFor (run (seq, q, g, 4.0), 0);
         check (ons.size() == 2, "half time: 2 kicks in the bar (got " + std::to_string (ons.size()) + ")");
     }
@@ -634,7 +638,9 @@ static void testScatter()
         h.steps = 16; h.fills = 16;
         for (int i = 0; i < 16; ++i) h.stepVel[(size_t) i] = (uint8_t) (40 + i * 5);
 
-        Sequencer plain, thrown;
+        auto plainOwned = std::make_unique<Sequencer>(); auto& plain = *plainOwned;
+
+        auto thrownOwned = std::make_unique<Sequencer>(); auto& thrown = *thrownOwned;
         auto base = run (plain, q, Globals {}, 8.0, 120.0, 256);
         auto withScatter = runWith (thrown, q, Globals {}, 8.0, 256, [] (Globals& g, double ppq)
         {
@@ -676,7 +682,8 @@ static void testScatter()
             for (int depth = 1; depth <= kMaxScatterDepth; ++depth)
             {
                 Globals g; g.scatter = true; g.scatterType = type; g.scatterDepth = depth; g.swing = 60;
-                Sequencer a, b;
+                auto aOwned = std::make_unique<Sequencer>(); auto& a = *aOwned;
+                auto bOwned = std::make_unique<Sequencer>(); auto& b = *bOwned;
                 auto ma = run (a, busy, g, 8.0, 120.0, 64);
                 auto mb = run (b, busy, g, 8.0, 120.0, 1999);
                 const bool well = wellFormed (ma) && wellFormed (mb);

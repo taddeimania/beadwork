@@ -1,4 +1,4 @@
-Beadwork for Logic Pro 1.3.0: the same Euclidean drum sequencer as the VST3, built as an Audio Unit for Logic's **MIDI FX** slot. New in 1.3.0: sixteen lanes instead of twelve, one for every pad of a 4 x 4 drum kit.
+Beadwork for Logic Pro 1.3.1: the same Euclidean drum sequencer as the VST3, built as an Audio Unit for Logic's **MIDI FX** slot. New in 1.3.1: it's signed and notarised by Apple, so Logic loads it straight away. New in 1.3.0: sixteen lanes instead of twelve, one for every pad of a 4 x 4 drum kit.
 
 ### What it is
 - **Beadwork MIDI FX** sits in the MIDI FX slot of a Software Instrument track, in front of Drum Machine Designer, Drum Kit Designer or any drum instrument. It needs no second track and no MIDI routing.

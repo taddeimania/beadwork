@@ -1,3 +1,5 @@
+Beadwork 1.3.1: the macOS build is signed and notarised by Apple, so your DAW loads it straight away, with no quarantine command first. Nothing else has changed since 1.3.0.
+
 Beadwork 1.3.0: sixteen lanes, one for every pad of a standard drum rack.
 
 ### Changed

@@ -13,11 +13,7 @@ Sets, grooves and kit maps saved by 1.2.0 and earlier load into lanes 1 to 12. L
 ### Install
 Download the file for your system below.
 
-- **macOS** (universal, Apple silicon + Intel): unzip, move `Beadwork.vst3` into `~/Library/Audio/Plug-Ins/VST3`, then run:
-  ```sh
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Beadwork.vst3
-  ```
-  The build isn't signed with an Apple developer certificate, so without this step your DAW won't load it.
+- **macOS** (universal, Apple silicon + Intel): unzip, move `Beadwork.vst3` into `~/Library/Audio/Plug-Ins/VST3`. The build is signed and notarised by Apple, so your DAW loads it straight away.
 - **Windows**: unzip and copy the `Beadwork.vst3` folder into `C:\Program Files\Common Files\VST3`.
 - **Linux**: extract, then copy `Beadwork.vst3` into `~/.vst3`.
 

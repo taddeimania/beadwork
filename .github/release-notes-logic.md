@@ -11,12 +11,8 @@ Sets, grooves and kit maps saved by 1.2.0 load into lanes 1 to 12; lanes 13 to 1
 ### Install
 macOS 11 or later, Apple silicon or Intel.
 
-1. Unzip and move `Beadwork MIDI FX.component` into `~/Library/Audio/Plug-Ins/Components`.
-2. The build isn't signed with an Apple developer certificate, so clear the download quarantine or Logic won't load it:
-   ```sh
-   xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/"Beadwork MIDI FX.component"
-   ```
-3. Open Logic. If Beadwork isn't listed, open **Logic Pro > Settings > Plug-in Manager**, select it and click **Reset & Rescan Selection**.
-4. On a drum track, click the **MIDI FX** slot and choose **Audio Units > Taddei > Beadwork MIDI FX**, then press play.
+1. Unzip and move `Beadwork MIDI FX.component` into `~/Library/Audio/Plug-Ins/Components`. It's signed and notarised by Apple, so Logic loads it straight away.
+2. Open Logic. If Beadwork isn't listed, open **Logic Pro > Settings > Plug-in Manager**, select it and click **Reset & Rescan Selection**.
+3. On a drum track, click the **MIDI FX** slot and choose **Audio Units > Taddei > Beadwork MIDI FX**, then press play.
 
 `Beadwork-in-Logic.txt` in the download covers matching lanes to pads and recording what it plays. The VST3 for Ableton Live is a separate release.

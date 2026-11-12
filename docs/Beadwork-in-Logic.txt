@@ -11,14 +11,10 @@ INSTALL
 
        ~/Library/Audio/Plug-Ins/Components
 
-   (In Finder: Go > Go to Folder..., paste the path.)
+   (In Finder: Go > Go to Folder..., paste the path.) It's signed and
+   notarised by Apple, so Logic loads it straight away.
 
-2. The build isn't signed with an Apple developer certificate, so clear the
-   download quarantine or Logic won't load it. In Terminal:
-
-       xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/"Beadwork MIDI FX.component"
-
-3. Open Logic. It checks new plug-ins when it starts. If Beadwork doesn't show
+2. Open Logic. It checks new plug-ins when it starts. If Beadwork doesn't show
    up, open Logic Pro > Settings > Plug-in Manager, select Beadwork MIDI FX and
    click "Reset & Rescan Selection".
 

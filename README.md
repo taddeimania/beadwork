@@ -45,16 +45,9 @@ Every archive also has the two PDF guides. There's no standalone version.
 
 Then install the plugin:
 
-- **macOS**: move `Beadwork.vst3` into `~/Library/Audio/Plug-Ins/VST3`, then
-  run:
-
-  ```sh
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Beadwork.vst3
-  ```
-
-  The builds aren't signed with an Apple developer certificate, so macOS
-  quarantines them when downloaded, and the DAW refuses to load them until
-  you clear that flag.
+- **macOS**: move `Beadwork.vst3` into `~/Library/Audio/Plug-Ins/VST3`. The
+  builds are signed and notarised by Apple, so your DAW loads them straight
+  away.
 - **Windows**: copy the whole `Beadwork.vst3` folder into
   `C:\Program Files\Common Files\VST3`.
 - **Linux**: copy `Beadwork.vst3` into `~/.vst3`.
@@ -277,12 +270,8 @@ Beadwork MIDI FX goes in the **MIDI FX** slot of a Software Instrument track,
 in front of Drum Machine Designer, Drum Kit Designer or any drum instrument.
 
 1. Install `Beadwork MIDI FX.component` into
-   `~/Library/Audio/Plug-Ins/Components` and clear the quarantine flag:
-
-   ```sh
-   xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/"Beadwork MIDI FX.component"
-   ```
-
+   `~/Library/Audio/Plug-Ins/Components`. It's signed and notarised by Apple,
+   so Logic loads it straight away.
 2. Open Logic. If Beadwork isn't listed, open **Logic Pro → Settings →
    Plug-in Manager**, select it and click **Reset & Rescan Selection**.
 3. On a drum track, click the **MIDI FX** slot and choose **Audio Units →

@@ -162,9 +162,18 @@ jobs:
             echo "::error::Notarization wasn't accepted (status: ${status:-unknown})."
             exit 1
           fi
+          # stapler only staples bundles. A runner with no DAW doesn't know that a
+          # .vst3 is one, so it sees a plain folder ("Stapler is incapable of
+          # working with Folder files"): set the bundle bit first. If stapling
+          # still fails the build is notarized all the same, and macOS fetches
+          # the ticket online the first time it checks the plug-in.
           for b in "${bundles[@]}"; do
-            xcrun stapler staple "$b"
-            xcrun stapler validate "$b"
+            SetFile -a B "$b" 2>/dev/null || true
+            if xcrun stapler staple "$b"; then
+              xcrun stapler validate "$b"
+            else
+              echo "::warning::Couldn't staple $(basename "$b"). It's notarized; macOS will fetch the ticket online."
+            fi
           done
 
       # Package the plugin ourselves so file permissions and the macOS code

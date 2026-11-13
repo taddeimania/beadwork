@@ -126,9 +126,11 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$kpass" "$keychain" > /dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
 
-          # Every bundle the build made: VST3, and the AU and standalone app where there are any.
+          # Only what this release ships: the Logic AU. (A VST3 can be left in the
+          # build folder too, but the Logic zip doesn't include it, so don't sign,
+          # notarize or staple it here.)
           shopt -s nullglob
-          bundles=(build/*_artefacts/Release/VST3/*.vst3 build/*_artefacts/Release/AU/*.component build/*_artefacts/Release/Standalone/*.app)
+          bundles=(build/BeadworkMidiFX_artefacts/Release/AU/*.component)
           if [ ${#bundles[@]} -eq 0 ]; then
             echo "::error::No plug-in bundles found to sign."
             exit 1
@@ -153,9 +155,18 @@ jobs:
             echo "::error::Notarization wasn't accepted (status: ${status:-unknown})."
             exit 1
           fi
+          # stapler only staples bundles. A runner with no DAW doesn't know that a
+          # .vst3 is one, so it sees a plain folder ("Stapler is incapable of
+          # working with Folder files"): set the bundle bit first. If stapling
+          # still fails the build is notarized all the same, and macOS fetches
+          # the ticket online the first time it checks the plug-in.
           for b in "${bundles[@]}"; do
-            xcrun stapler staple "$b"
-            xcrun stapler validate "$b"
+            SetFile -a B "$b" 2>/dev/null || true
+            if xcrun stapler staple "$b"; then
+              xcrun stapler validate "$b"
+            else
+              echo "::warning::Couldn't staple $(basename "$b"). It's notarized; macOS will fetch the ticket online."
+            fi
           done
 
       # Package it ourselves so permissions and the code signature survive the
